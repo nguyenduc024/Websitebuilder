@@ -15,8 +15,16 @@ import org.springframework.web.bind.annotation.RestController;
 
 import gr7.oop.HealthLink.dao.ClinicManagerDAO;
 import gr7.oop.HealthLink.dao.ClinicManagerDAO.DoctorStats;
+import gr7.oop.HealthLink.dao.ClinicManagerDAO.DoctorInfo;
+import gr7.oop.HealthLink.dao.ClinicManagerDAO.PatientInfo;
+import gr7.oop.HealthLink.dao.ClinicManagerDAO.InvoiceInfo;
+import gr7.oop.HealthLink.dao.ClinicManagerDAO.DashboardStats;
+import gr7.oop.HealthLink.dao.ClinicManagerDAO.ClinicRoomInfo;
+import gr7.oop.HealthLink.dao.ClinicManagerDAO.MedicineInfo;
+import gr7.oop.HealthLink.dao.ClinicManagerDAO.AppointmentInfo;
 import gr7.oop.HealthLink.entity.Appointment;
 import gr7.oop.HealthLink.entity.ClinicRoom;
+import gr7.oop.HealthLink.entity.Department;
 import gr7.oop.HealthLink.entity.Doctor;
 import gr7.oop.HealthLink.entity.MedicalRecord;
 import gr7.oop.HealthLink.entity.Patient;
@@ -155,7 +163,7 @@ public class ClinicAPIController {
 		}
 	}
 
-	// API: Bác sĩ đặt lịch làm việc
+	// Bác sĩ đặt lịch làm việc
 	@PostMapping("/work-schedule/add")
 	public Map<String, String> addWorkSchedule(@RequestBody WorkSchedule ws) {
 		boolean success = dao.setWorkSchedule(ws);
@@ -163,5 +171,47 @@ public class ClinicAPIController {
 			return Map.of("status", "success", "message", "Đã cập nhật lịch làm việc!");
 		}
 		return Map.of("status", "error", "message", "Không thể lưu lịch làm việc.");
+	}
+
+	// ===== LISTING APIs =====
+
+	@GetMapping("/doctors")
+	public List<DoctorInfo> getAllDoctors() {
+		return dao.getAllDoctors();
+	}
+
+	@GetMapping("/patients")
+	public List<PatientInfo> getAllPatients() {
+		return dao.getAllPatients();
+	}
+
+	@GetMapping("/appointments")
+	public List<AppointmentInfo> getAllAppointments() {
+		return dao.getAllAppointments();
+	}
+
+	@GetMapping("/invoices")
+	public List<InvoiceInfo> getAllInvoices() {
+		return dao.getAllInvoices();
+	}
+
+	@GetMapping("/dashboard/stats")
+	public DashboardStats getDashboardStats() {
+		return dao.getDashboardStats();
+	}
+
+	@GetMapping("/clinic-rooms")
+	public List<ClinicRoomInfo> getAllClinicRooms() {
+		return dao.getAllClinicRooms();
+	}
+
+	@GetMapping("/departments")
+	public List<Department> getAllDepartments() {
+		return dao.getAllDepartments();
+	}
+
+	@GetMapping("/medicines")
+	public List<MedicineInfo> getAllMedicines() {
+		return dao.getAllMedicines();
 	}
 }

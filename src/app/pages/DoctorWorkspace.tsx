@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   FileText, 
   Pill, 
@@ -12,17 +12,39 @@ import {
   X
 } from "lucide-react";
 
+const API_BASE = "http://localhost:8080/api";
+
+interface QueueItem {
+  appointmentId: number;
+  patientName: string;
+  doctorName: string;
+  clinicRoomName: string | null;
+  status: string;
+  reason: string | null;
+  dateTime: string;
+}
+
 export function DoctorWorkspace() {
   const [activeTab, setActiveTab] = useState("ehr");
-  const [selectedPatient, setSelectedPatient] = useState("P-8942");
+  const [selectedPatientIdx, setSelectedPatientIdx] = useState(0);
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
   const [selectedMedication, setSelectedMedication] = useState<any>(null);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const mockQueue = [
-    { id: "P-8942", name: "Alice Johnson", time: "09:00 AM", status: "In Progress", type: "Check-up" },
-    { id: "P-8945", name: "David Kim", time: "09:30 AM", status: "Waiting", type: "Follow-up" },
-    { id: "P-8943", name: "Robert Smith", time: "10:00 AM", status: "Waiting", type: "Consultation" },
-  ];
+  useEffect(() => {
+    fetch(`${API_BASE}/appointments`)
+      .then(res => res.json())
+      .then((data: QueueItem[]) => { setQueue(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const selectedPatient = queue[selectedPatientIdx] || null;
+
+  const formatTime = (dateTimeStr: string) => {
+    try { return new Date(dateTimeStr).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }); }
+    catch { return '—'; }
+  };
 
   const handleViewMedication = (med: any) => {
     setSelectedMedication(med);
@@ -33,16 +55,16 @@ export function DoctorWorkspace() {
     <div className="h-full flex flex-col space-y-4 lg:space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Dr. Sarah Miller's Workspace</h1>
-          <p className="text-sm text-slate-500 mt-1">Manage patient records, prescriptions, and daily queue.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Phòng khám</h1>
+          <p className="text-sm text-slate-500 mt-1">Quản lý hồ sơ bệnh nhân, đơn thuốc và danh sách chờ.</p>
         </div>
         <div className="flex gap-2">
           <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
             <Save className="w-4 h-4" />
-            Save Draft
+            Lưu nháp
           </button>
           <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-200">
-            Complete Visit
+            Hoàn tất khám
           </button>
         </div>
       </div>
@@ -54,36 +76,40 @@ export function DoctorWorkspace() {
           <div className="p-4 border-b border-slate-100 bg-slate-50/50">
             <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
               <Clock className="w-4 h-4 text-emerald-600" />
-              Patient Queue
+              Danh sách chờ
             </h2>
             <div className="mt-3 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input type="text" placeholder="Search queue..." className="w-full pl-9 pr-3 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-emerald-500 outline-none" />
+              <input type="text" placeholder="Tìm kiếm..." className="w-full pl-9 pr-3 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-emerald-500 outline-none" />
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-2">
-            {mockQueue.map((patient) => (
+            {loading ? (
+              <div className="p-4 text-center text-sm text-slate-500">Đang tải...</div>
+            ) : queue.map((patient, idx) => (
               <div 
-                key={patient.id} 
+                key={patient.appointmentId} 
                 className={`p-3 mb-2 rounded-lg cursor-pointer transition-colors border ${
-                  selectedPatient === patient.id 
+                  selectedPatientIdx === idx 
                     ? "bg-emerald-50 border-emerald-200 shadow-sm" 
                     : "bg-white border-transparent hover:bg-slate-50"
                 }`}
-                onClick={() => setSelectedPatient(patient.id)}
+                onClick={() => setSelectedPatientIdx(idx)}
               >
                 <div className="flex justify-between items-start mb-1">
-                  <span className="font-semibold text-sm text-slate-900">{patient.time}</span>
+                  <span className="font-semibold text-sm text-slate-900">{formatTime(patient.dateTime)}</span>
                   <span className={`text-[10px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-sm ${
-                    patient.status === 'In Progress' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
+                    patient.status === 'Đã xác nhận' ? 'bg-amber-100 text-amber-700' : 
+                    patient.status === 'Hoàn thành' ? 'bg-emerald-100 text-emerald-700' :
+                    'bg-slate-100 text-slate-500'
                   }`}>
                     {patient.status}
                   </span>
                 </div>
-                <h3 className={`text-sm font-medium ${selectedPatient === patient.id ? "text-emerald-700" : "text-slate-700"}`}>
-                  {patient.name}
+                <h3 className={`text-sm font-medium ${selectedPatientIdx === idx ? "text-emerald-700" : "text-slate-700"}`}>
+                  {patient.patientName}
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">{patient.type} • {patient.id}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{patient.reason || 'Khám bệnh'} • {patient.doctorName}</p>
               </div>
             ))}
           </div>
@@ -94,25 +120,31 @@ export function DoctorWorkspace() {
           
           {/* Patient Header */}
           <div className="p-4 sm:p-6 border-b border-slate-100 flex items-start sm:items-center justify-between bg-slate-50/50">
+            {selectedPatient ? (
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-xl">
-                A
+                {selectedPatient.patientName?.charAt(0) || '?'}
               </div>
               <div>
-                <h2 className="text-xl font-bold text-slate-900">Alice Johnson</h2>
+                <h2 className="text-xl font-bold text-slate-900">{selectedPatient.patientName}</h2>
                 <div className="flex items-center gap-3 text-sm text-slate-500 mt-1 font-medium">
-                  <span>ID: P-8942</span>
+                  <span>Mã LH: {selectedPatient.appointmentId}</span>
                   <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                  <span>Female, 34 yrs</span>
-                  <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                  <span className="text-amber-600 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" /> Penicillin Allergy
-                  </span>
+                  <span>BS: {selectedPatient.doctorName}</span>
+                  {selectedPatient.clinicRoomName && (
+                    <>
+                      <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                      <span>{selectedPatient.clinicRoomName}</span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
+            ) : (
+              <div className="text-sm text-slate-500">Chọn bệnh nhân từ danh sách chờ</div>
+            )}
             <button className="hidden sm:flex items-center gap-1 text-sm font-medium text-emerald-600 hover:text-emerald-700 transition-colors">
-              Full Profile <ChevronRight className="w-4 h-4" />
+              Hồ sơ đầy đủ <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
@@ -122,13 +154,13 @@ export function DoctorWorkspace() {
               className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'ehr' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`}
               onClick={() => setActiveTab('ehr')}
             >
-              <FileText className="w-4 h-4" /> Electronic Health Record
+              <FileText className="w-4 h-4" /> Hồ sơ bệnh án
             </button>
             <button 
               className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'rx' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`}
               onClick={() => setActiveTab('rx')}
             >
-              <Pill className="w-4 h-4" /> E-Prescription
+              <Pill className="w-4 h-4" /> Đơn thuốc
             </button>
           </div>
 
@@ -138,15 +170,15 @@ export function DoctorWorkspace() {
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-700">Chief Complaint</label>
+                    <label className="text-sm font-semibold text-slate-700">Triệu chứng chính</label>
                     <textarea 
                       className="w-full h-24 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none transition-all"
-                      placeholder="Patient reports..."
-                      defaultValue="Patient reports experiencing mild chest pain and shortness of breath during exercise over the past 2 weeks."
+                      placeholder="Bệnh nhân cho biết..."
+                      defaultValue=""
                     ></textarea>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-700">Vital Signs</label>
+                    <label className="text-sm font-semibold text-slate-700">Chỉ số sinh tồn</label>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 flex justify-between items-center">
                         <span className="text-xs text-slate-500 font-medium">BP</span>
@@ -169,19 +201,19 @@ export function DoctorWorkspace() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-700">Clinical Notes & Diagnosis</label>
+                  <label className="text-sm font-semibold text-slate-700">Ghi chú lâm sàng & Chẩn đoán</label>
                   <textarea 
                     className="w-full h-40 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none resize-none transition-all"
-                    placeholder="Enter detailed clinical notes..."
+                    placeholder="Nhập ghi chú lâm sàng chi tiết..."
                   ></textarea>
                 </div>
               </div>
             ) : (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-base font-semibold text-slate-900">Current Prescriptions</h3>
+                  <h3 className="text-base font-semibold text-slate-900">Đơn thuốc hiện tại</h3>
                   <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-sm font-medium rounded-md hover:bg-emerald-100 transition-colors">
-                    <Plus className="w-4 h-4" /> Add Medication
+                    <Plus className="w-4 h-4" /> Thêm thuốc
                   </button>
                 </div>
 
@@ -204,7 +236,7 @@ export function DoctorWorkspace() {
                         onClick={() => handleViewMedication(med)}
                         className="mt-3 sm:mt-0 text-sm font-medium text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-md hover:bg-emerald-100 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
                       >
-                        View Details
+                        Xem chi tiết
                       </button>
                     </div>
                   ))}
@@ -221,7 +253,7 @@ export function DoctorWorkspace() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
               <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Pill className="w-5 h-5 text-emerald-600" /> Medication Details
+                <Pill className="w-5 h-5 text-emerald-600" /> Chi tiết thuốc
               </h3>
               <button 
                 onClick={() => setShowPrescriptionModal(false)}
@@ -232,26 +264,26 @@ export function DoctorWorkspace() {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Drug Name</label>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Tên thuốc</label>
                 <p className="text-base font-bold text-slate-900 mt-1">{selectedMedication.name}</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Dosage</label>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Liều lượng</label>
                   <p className="text-sm font-medium text-slate-800 mt-1">{selectedMedication.dosage}</p>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Duration</label>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Thời gian</label>
                   <p className="text-sm font-medium text-slate-800 mt-1">{selectedMedication.duration}</p>
                 </div>
               </div>
               <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Frequency</label>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Tần suất</label>
                 <p className="text-sm font-medium text-slate-800 mt-1">{selectedMedication.frequency}</p>
               </div>
               <div className="bg-amber-50 border border-amber-100 p-3 rounded-lg">
                 <label className="text-xs font-semibold text-amber-700 uppercase tracking-wider flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" /> Pharmacist Notes
+                  <AlertCircle className="w-3 h-3" /> Ghi chú dược sĩ
                 </label>
                 <p className="text-sm text-amber-900 mt-1">{selectedMedication.notes}</p>
               </div>
@@ -261,10 +293,10 @@ export function DoctorWorkspace() {
                 onClick={() => setShowPrescriptionModal(false)}
                 className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
               >
-                Close
+                Đóng
               </button>
               <button className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-200">
-                Print Rx
+                In đơn thuốc
               </button>
             </div>
           </div>

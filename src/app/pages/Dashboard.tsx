@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { 
   Users, 
   Stethoscope, 
@@ -19,51 +20,66 @@ import {
   Area
 } from "recharts";
 
-const data = [
-  { name: 'Mon', patients: 40, revenue: 2400 },
-  { name: 'Tue', patients: 30, revenue: 1398 },
-  { name: 'Wed', patients: 20, revenue: 9800 },
-  { name: 'Thu', patients: 27, revenue: 3908 },
-  { name: 'Fri', patients: 18, revenue: 4800 },
-  { name: 'Sat', patients: 23, revenue: 3800 },
-  { name: 'Sun', patients: 34, revenue: 4300 },
+const API_BASE = "http://localhost:8080/api";
+
+interface DashboardStats {
+  totalPatients: number;
+  totalDoctors: number;
+  totalAppointments: number;
+  totalRevenue: number;
+}
+
+const defaultData = [
+  { name: 'T2', patients: 0 },
+  { name: 'T3', patients: 0 },
+  { name: 'T4', patients: 0 },
+  { name: 'T5', patients: 0 },
+  { name: 'T6', patients: 0 },
+  { name: 'T7', patients: 0 },
+  { name: 'CN', patients: 0 },
 ];
 
 export function Dashboard() {
+  const [stats, setStats] = useState<DashboardStats>({ totalPatients: 0, totalDoctors: 0, totalAppointments: 0, totalRevenue: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/dashboard/stats`)
+      .then(res => res.json())
+      .then(data => { setStats(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const formatVND = (amount: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Dashboard Overview</h1>
-          <p className="text-sm text-slate-500 mt-1">Welcome back. Here's what's happening today.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Tổng quan</h1>
+          <p className="text-sm text-slate-500 mt-1">Chào bạn. Đây là tình hình hôm nay.</p>
         </div>
         <div className="flex items-center gap-2">
           <button className="px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
-            Export Report
+            Xuất báo cáo
           </button>
           <button className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-200">
-            New Appointment
+            Đặt lịch mới
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {[
-          { title: "Total Patients", value: "2,834", icon: Users, change: "+12.5%", isPositive: true },
-          { title: "Active Doctors", value: "48", icon: Stethoscope, change: "+2.1%", isPositive: true },
-          { title: "Today's Appointments", value: "124", icon: CalendarDays, change: "-4.5%", isPositive: false },
-          { title: "Monthly Revenue", value: "$45,231", icon: TrendingUp, change: "+8.4%", isPositive: true },
+          { title: "Tổng bệnh nhân", value: loading ? "..." : String(stats.totalPatients), icon: Users },
+          { title: "Bác sĩ", value: loading ? "..." : String(stats.totalDoctors), icon: Stethoscope },
+          { title: "Lịch hẹn", value: loading ? "..." : String(stats.totalAppointments), icon: CalendarDays },
+          { title: "Doanh thu", value: loading ? "..." : formatVND(stats.totalRevenue), icon: TrendingUp },
         ].map((stat, idx) => (
           <div key={idx} className="bg-white p-6 rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-slate-100 flex flex-col hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
               <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600">
                 <stat.icon className="w-5 h-5" />
               </div>
-              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                stat.isPositive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"
-              }`}>
-                {stat.change}
-              </span>
             </div>
             <h3 className="text-sm font-medium text-slate-500">{stat.title}</h3>
             <p className="text-2xl font-bold text-slate-900 mt-1">{stat.value}</p>
@@ -74,15 +90,15 @@ export function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-slate-100">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-base font-semibold text-slate-900">Patient Footfall</h3>
+            <h3 className="text-base font-semibold text-slate-900">Lượt khám bệnh</h3>
             <select className="text-sm border-none bg-slate-50 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-emerald-500 outline-none text-slate-600 font-medium">
-              <option>This Week</option>
-              <option>Last Week</option>
+              <option>Tuần này</option>
+              <option>Tuần trước</option>
             </select>
           </div>
           <div className="h-72 w-full min-h-[288px]">
             <ResponsiveContainer width="100%" height={288}>
-              <AreaChart id="dashboard-chart" accessibilityLayer={false} data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <AreaChart id="dashboard-chart" accessibilityLayer={false} data={defaultData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs key="defs">
                   <linearGradient id="colorPatients" key="colorPatients" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#059669" stopOpacity={0.1} key="stop1"/>
@@ -103,20 +119,22 @@ export function Dashboard() {
         </div>
 
         <div className="bg-white p-6 rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-slate-100 flex flex-col">
-          <h3 className="text-base font-semibold text-slate-900 mb-6">Urgent Alerts</h3>
+          <h3 className="text-base font-semibold text-slate-900 mb-6">Cảnh báo</h3>
           <div className="flex-1 overflow-y-auto space-y-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="flex gap-4 p-3 rounded-lg border border-red-100 bg-red-50/50 hover:bg-red-50 transition-colors cursor-pointer">
-                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            {loading ? (
+              <div className="p-4 text-center text-sm text-slate-500">Đang tải...</div>
+            ) : (
+              <div className="flex gap-4 p-3 rounded-lg border border-slate-100 bg-slate-50/50">
+                <AlertCircle className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-sm font-medium text-slate-900">Dr. Sarah Miller</h4>
-                  <p className="text-xs text-slate-500 mt-1">Pending EHR approval for Patient #8942. Due 2 hours ago.</p>
+                  <h4 className="text-sm font-medium text-slate-900">Hệ thống</h4>
+                  <p className="text-xs text-slate-500 mt-1">Hiện có {stats.totalPatients} bệnh nhân và {stats.totalDoctors} bác sĩ trong hệ thống.</p>
                 </div>
               </div>
-            ))}
+            )}
           </div>
           <button className="mt-6 w-full py-2.5 text-sm font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">
-            View All Alerts
+            Xem tất cả
           </button>
         </div>
       </div>

@@ -11,6 +11,7 @@ import java.util.List;
 import gr7.oop.HealthLink.DatabaseConnection;
 import gr7.oop.HealthLink.entity.Appointment;
 import gr7.oop.HealthLink.entity.CategoryMedicine;
+import gr7.oop.HealthLink.entity.Department;
 import gr7.oop.HealthLink.entity.Doctor;
 import gr7.oop.HealthLink.entity.MedicalRecord;
 import gr7.oop.HealthLink.entity.Patient;
@@ -262,6 +263,7 @@ public class ClinicManagerDAO {
 	public static class AppointmentInfo {
 		public int apId;
 		public String patientName;
+		public String doctorName;
 		public String roomName;
 		public String dateTime;
 		public String reason;
@@ -368,6 +370,328 @@ public class ClinicManagerDAO {
 			System.err.println("Lỗi thực thi SQL: " + e.getMessage());
 			return false;
 		}
+	}
+
+	// ===== LISTING APIs =====
+
+	// Lấy danh sách tất cả bác sĩ
+	public static class DoctorInfo {
+		public int doctorId;
+		public String firstName;
+		public String middleName;
+		public String lastName;
+		public String fullName;
+		public String sex;
+		public String phone;
+		public String address;
+		public String specialty;
+		public String departmentName;
+		public String birthday;
+
+		public DoctorInfo(int doctorId, String firstName, String middleName, String lastName, String sex, String phone,
+				String address, String specialty, String departmentName, String birthday) {
+			this.doctorId = doctorId;
+			this.firstName = firstName;
+			this.middleName = middleName;
+			this.lastName = lastName;
+			this.fullName = lastName + " " + (middleName != null && !middleName.isEmpty() ? middleName + " " : "") + firstName;
+			this.sex = sex;
+			this.phone = phone;
+			this.address = address;
+			this.specialty = specialty;
+			this.departmentName = departmentName;
+			this.birthday = birthday;
+		}
+	}
+
+	public List<DoctorInfo> getAllDoctors() {
+		List<DoctorInfo> list = new ArrayList<>();
+		String sql = "SELECT d.DrId, d.DrFirstName, d.DrMiddleName, d.DrLastName, d.DrSex, d.DrPhone, d.DrAddress, "
+				+ "d.DrSpecialty, dep.DName, d.DrBirthday "
+				+ "FROM DOCTOR d LEFT JOIN DEPARTMENT dep ON d.DId = dep.DId ORDER BY d.DrId";
+		try (Connection conn = DatabaseConnection.getConnection();
+				PreparedStatement pstmt = conn.prepareStatement(sql);
+				ResultSet rs = pstmt.executeQuery()) {
+			while (rs.next()) {
+				list.add(new DoctorInfo(
+					rs.getInt("DrId"), rs.getString("DrFirstName"), rs.getString("DrMiddleName"),
+					rs.getString("DrLastName"), rs.getString("DrSex"), rs.getString("DrPhone"),
+					rs.getString("DrAddress"), rs.getString("DrSpecialty"), rs.getString("DName"),
+					rs.getDate("DrBirthday") != null ? rs.getDate("DrBirthday").toString() : null
+				));
+			}
+		} catch (SQLException e) {
+			System.err.println("Lỗi lấy danh sách bác sĩ: " + e.getMessage());
+		}
+		return list;
+	}
+
+	// Lấy danh sách tất cả bệnh nhân
+	public static class PatientInfo {
+		public int patientId;
+		public String firstName;
+		public String middleName;
+		public String lastName;
+		public String fullName;
+		public String sex;
+		public String phone;
+		public String address;
+		public String insurance;
+		public String birthday;
+
+		public PatientInfo(int patientId, String firstName, String middleName, String lastName, String sex,
+				String phone, String address, String insurance, String birthday) {
+			this.patientId = patientId;
+			this.firstName = firstName;
+			this.middleName = middleName;
+			this.lastName = lastName;
+			this.fullName = lastName + " " + (middleName != null && !middleName.isEmpty() ? middleName + " " : "") + firstName;
+			this.sex = sex;
+			this.phone = phone;
+			this.address = address;
+			this.insurance = insurance;
+			this.birthday = birthday;
+		}
+	}
+
+	public List<PatientInfo> getAllPatients() {
+		List<PatientInfo> list = new ArrayList<>();
+		String sql = "SELECT PId, PFirstName, PMiddleName, PLastName, PSex, PPhone, PAddress, PInsurance, PBirthDate FROM PATIENT ORDER BY PId";
+		try (Connection conn = DatabaseConnection.getConnection();
+				PreparedStatement pstmt = conn.prepareStatement(sql);
+				ResultSet rs = pstmt.executeQuery()) {
+			while (rs.next()) {
+				list.add(new PatientInfo(
+					rs.getInt("PId"), rs.getString("PFirstName"), rs.getString("PMiddleName"),
+					rs.getString("PLastName"), rs.getString("PSex"), rs.getString("PPhone"),
+					rs.getString("PAddress"), rs.getString("PInsurance"),
+					rs.getDate("PBirthDate") != null ? rs.getDate("PBirthDate").toString() : null
+				));
+			}
+		} catch (SQLException e) {
+			System.err.println("Lỗi lấy danh sách bệnh nhân: " + e.getMessage());
+		}
+		return list;
+	}
+
+	// Lấy tất cả lịch hẹn
+	public List<AppointmentInfo> getAllAppointments() {
+		List<AppointmentInfo> list = new ArrayList<>();
+		String sql = "SELECT a.APId, "
+				+ "p.PLastName + ' ' + ISNULL(p.PMiddleName + ' ', '') + p.PFirstName AS PatientName, "
+				+ "d.DrLastName + ' ' + ISNULL(d.DrMiddleName + ' ', '') + d.DrFirstName AS DoctorName, "
+				+ "c.CRName, a.APDateTimes, a.APReason, a.APStatus "
+				+ "FROM APPOINTMENT a "
+				+ "JOIN PATIENT p ON a.PId = p.PId "
+				+ "JOIN DOCTOR d ON a.DrId = d.DrId "
+				+ "JOIN CLINIC_ROOM c ON a.CRId = c.CRId "
+				+ "ORDER BY a.APDateTimes DESC";
+		try (Connection conn = DatabaseConnection.getConnection();
+				PreparedStatement pstmt = conn.prepareStatement(sql);
+				ResultSet rs = pstmt.executeQuery()) {
+			while (rs.next()) {
+				AppointmentInfo info = new AppointmentInfo(
+					rs.getInt("APId"), rs.getString("PatientName"), rs.getString("CRName"),
+					rs.getTimestamp("APDateTimes").toString(), rs.getString("APReason"), rs.getString("APStatus")
+				);
+				info.doctorName = rs.getString("DoctorName");
+				list.add(info);
+			}
+		} catch (SQLException e) {
+			System.err.println("Lỗi lấy tất cả lịch hẹn: " + e.getMessage());
+		}
+		return list;
+	}
+
+	// Lấy danh sách hóa đơn
+	public static class InvoiceInfo {
+		public int invoiceId;
+		public int appointmentId;
+		public String patientName;
+		public double totalPrice;
+		public String paymentMethod;
+		public String status;
+		public String paidDate;
+
+		public InvoiceInfo(int invoiceId, int appointmentId, String patientName, double totalPrice,
+				String paymentMethod, String status, String paidDate) {
+			this.invoiceId = invoiceId;
+			this.appointmentId = appointmentId;
+			this.patientName = patientName;
+			this.totalPrice = totalPrice;
+			this.paymentMethod = paymentMethod;
+			this.status = status;
+			this.paidDate = paidDate;
+		}
+	}
+
+	public List<InvoiceInfo> getAllInvoices() {
+		List<InvoiceInfo> list = new ArrayList<>();
+		String sql = "SELECT i.INId, i.APId, "
+				+ "p.PLastName + ' ' + ISNULL(p.PMiddleName + ' ', '') + p.PFirstName AS PatientName, "
+				+ "i.INTotalPrice, i.INPaymentMethod, i.INStatus, i.INPaidDate "
+				+ "FROM INVOICE i "
+				+ "JOIN APPOINTMENT a ON i.APId = a.APId "
+				+ "JOIN PATIENT p ON a.PId = p.PId "
+				+ "ORDER BY i.INId DESC";
+		try (Connection conn = DatabaseConnection.getConnection();
+				PreparedStatement pstmt = conn.prepareStatement(sql);
+				ResultSet rs = pstmt.executeQuery()) {
+			while (rs.next()) {
+				list.add(new InvoiceInfo(
+					rs.getInt("INId"), rs.getInt("APId"), rs.getString("PatientName"),
+					rs.getDouble("INTotalPrice"), rs.getString("INPaymentMethod"),
+					rs.getString("INStatus"),
+					rs.getTimestamp("INPaidDate") != null ? rs.getTimestamp("INPaidDate").toString() : null
+				));
+			}
+		} catch (SQLException e) {
+			System.err.println("Lỗi lấy danh sách hóa đơn: " + e.getMessage());
+		}
+		return list;
+	}
+
+	// Thống kê cho Dashboard
+	public static class DashboardStats {
+		public int totalPatients;
+		public int totalDoctors;
+		public int todayAppointments;
+		public double totalRevenue;
+		public double pendingAmount;
+
+		public DashboardStats(int totalPatients, int totalDoctors, int todayAppointments, double totalRevenue, double pendingAmount) {
+			this.totalPatients = totalPatients;
+			this.totalDoctors = totalDoctors;
+			this.todayAppointments = todayAppointments;
+			this.totalRevenue = totalRevenue;
+			this.pendingAmount = pendingAmount;
+		}
+	}
+
+	public DashboardStats getDashboardStats() {
+		int totalPatients = 0, totalDoctors = 0, todayAppointments = 0;
+		double totalRevenue = 0, pendingAmount = 0;
+
+		try (Connection conn = DatabaseConnection.getConnection()) {
+			// Tổng bệnh nhân
+			try (PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM PATIENT");
+				 ResultSet rs = ps.executeQuery()) {
+				if (rs.next()) totalPatients = rs.getInt(1);
+			}
+			// Tổng bác sĩ
+			try (PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM DOCTOR");
+				 ResultSet rs = ps.executeQuery()) {
+				if (rs.next()) totalDoctors = rs.getInt(1);
+			}
+			// Lịch hẹn hôm nay
+			try (PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM APPOINTMENT WHERE CAST(APDateTimes AS DATE) = CAST(GETDATE() AS DATE)");
+				 ResultSet rs = ps.executeQuery()) {
+				if (rs.next()) todayAppointments = rs.getInt(1);
+			}
+			// Tổng doanh thu (đã thanh toán)
+			try (PreparedStatement ps = conn.prepareStatement("SELECT ISNULL(SUM(INTotalPrice), 0) FROM INVOICE WHERE INStatus = N'Đã thanh toán'");
+				 ResultSet rs = ps.executeQuery()) {
+				if (rs.next()) totalRevenue = rs.getDouble(1);
+			}
+			// Chưa thanh toán
+			try (PreparedStatement ps = conn.prepareStatement("SELECT ISNULL(SUM(INTotalPrice), 0) FROM INVOICE WHERE INStatus = N'Chưa thanh toán'");
+				 ResultSet rs = ps.executeQuery()) {
+				if (rs.next()) pendingAmount = rs.getDouble(1);
+			}
+		} catch (SQLException e) {
+			System.err.println("Lỗi lấy thống kê dashboard: " + e.getMessage());
+		}
+
+		return new DashboardStats(totalPatients, totalDoctors, todayAppointments, totalRevenue, pendingAmount);
+	}
+
+	// Lấy danh sách phòng khám
+	public static class ClinicRoomInfo {
+		public int roomId;
+		public String roomName;
+		public String roomNumber;
+		public int capacity;
+		public String status;
+		public String departmentName;
+
+		public ClinicRoomInfo(int roomId, String roomName, String roomNumber, int capacity, String status, String departmentName) {
+			this.roomId = roomId;
+			this.roomName = roomName;
+			this.roomNumber = roomNumber;
+			this.capacity = capacity;
+			this.status = status;
+			this.departmentName = departmentName;
+		}
+	}
+
+	public List<ClinicRoomInfo> getAllClinicRooms() {
+		List<ClinicRoomInfo> list = new ArrayList<>();
+		String sql = "SELECT cr.CRId, cr.CRName, cr.CRNumber, cr.CRCapacity, cr.CRStatus, dep.DName "
+				+ "FROM CLINIC_ROOM cr LEFT JOIN DEPARTMENT dep ON cr.DId = dep.DId ORDER BY cr.CRId";
+		try (Connection conn = DatabaseConnection.getConnection();
+				PreparedStatement pstmt = conn.prepareStatement(sql);
+				ResultSet rs = pstmt.executeQuery()) {
+			while (rs.next()) {
+				list.add(new ClinicRoomInfo(
+					rs.getInt("CRId"), rs.getString("CRName"), rs.getString("CRNumber"),
+					rs.getInt("CRCapacity"), rs.getString("CRStatus"), rs.getString("DName")
+				));
+			}
+		} catch (SQLException e) {
+			System.err.println("Lỗi lấy danh sách phòng khám: " + e.getMessage());
+		}
+		return list;
+	}
+
+	// Lấy danh sách khoa
+	public List<Department> getAllDepartments() {
+		List<Department> list = new ArrayList<>();
+		String sql = "SELECT DId, DName, DStartDate FROM DEPARTMENT ORDER BY DId";
+		try (Connection conn = DatabaseConnection.getConnection();
+				PreparedStatement pstmt = conn.prepareStatement(sql);
+				ResultSet rs = pstmt.executeQuery()) {
+			while (rs.next()) {
+				list.add(new Department(rs.getInt("DId"), rs.getString("DName"), rs.getDate("DStartDate")));
+			}
+		} catch (SQLException e) {
+			System.err.println("Lỗi lấy danh sách khoa: " + e.getMessage());
+		}
+		return list;
+	}
+
+	// Lấy danh sách thuốc
+	public static class MedicineInfo {
+		public int medicineId;
+		public String name;
+		public int stockQuantity;
+		public double price;
+		public String note;
+
+		public MedicineInfo(int medicineId, String name, int stockQuantity, double price, String note) {
+			this.medicineId = medicineId;
+			this.name = name;
+			this.stockQuantity = stockQuantity;
+			this.price = price;
+			this.note = note;
+		}
+	}
+
+	public List<MedicineInfo> getAllMedicines() {
+		List<MedicineInfo> list = new ArrayList<>();
+		String sql = "SELECT CMId, CMName, CMStockQuantity, CMPrice, CMNote FROM CATEGORY_MEDICINE ORDER BY CMId";
+		try (Connection conn = DatabaseConnection.getConnection();
+				PreparedStatement pstmt = conn.prepareStatement(sql);
+				ResultSet rs = pstmt.executeQuery()) {
+			while (rs.next()) {
+				list.add(new MedicineInfo(
+					rs.getInt("CMId"), rs.getString("CMName"), rs.getInt("CMStockQuantity"),
+					rs.getDouble("CMPrice"), rs.getString("CMNote")
+				));
+			}
+		} catch (SQLException e) {
+			System.err.println("Lỗi lấy danh sách thuốc: " + e.getMessage());
+		}
+		return list;
 	}
 
 }

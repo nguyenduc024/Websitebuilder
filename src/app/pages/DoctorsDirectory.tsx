@@ -1,20 +1,37 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Plus, Filter, MoreVertical, Edit, Trash2 } from "lucide-react";
 
-const mockDoctors = [
-  { id: "D-001", name: "Dr. Sarah Miller", specialty: "Cardiology", status: "Active", email: "sarah.m@healthlink.com", phone: "+1 (555) 123-4567" },
-  { id: "D-002", name: "Dr. James Wilson", specialty: "Neurology", status: "On Leave", email: "j.wilson@healthlink.com", phone: "+1 (555) 987-6543" },
-  { id: "D-003", name: "Dr. Emily Chen", specialty: "Pediatrics", status: "Active", email: "e.chen@healthlink.com", phone: "+1 (555) 456-7890" },
-  { id: "D-004", name: "Dr. Michael Brown", specialty: "Orthopedics", status: "Active", email: "m.brown@healthlink.com", phone: "+1 (555) 234-5678" },
-  { id: "D-005", name: "Dr. Jessica Davis", specialty: "Dermatology", status: "Inactive", email: "j.davis@healthlink.com", phone: "+1 (555) 876-5432" },
-];
+const API_BASE = "http://localhost:8080/api";
+
+interface DoctorData {
+  doctorId: number;
+  firstName: string;
+  middleName: string | null;
+  lastName: string;
+  fullName: string;
+  sex: string;
+  phone: string;
+  address: string;
+  specialty: string;
+  departmentName: string | null;
+  birthday: string | null;
+}
 
 export function DoctorsDirectory() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [doctors, setDoctors] = useState<DoctorData[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredDoctors = mockDoctors.filter(doc => 
-    doc.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    doc.specialty.toLowerCase().includes(searchTerm.toLowerCase())
+  useEffect(() => {
+    fetch(`${API_BASE}/doctors`)
+      .then(res => res.json())
+      .then(data => { setDoctors(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const filteredDoctors = doctors.filter(doc => 
+    doc.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (doc.specialty && doc.specialty.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -52,44 +69,40 @@ export function DoctorsDirectory() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                <th className="px-6 py-4 font-medium">Doctor ID</th>
-                <th className="px-6 py-4 font-medium">Name</th>
-                <th className="px-6 py-4 font-medium">Specialty</th>
-                <th className="px-6 py-4 font-medium">Contact</th>
-                <th className="px-6 py-4 font-medium">Status</th>
-                <th className="px-6 py-4 font-medium text-right">Actions</th>
+                <th className="px-6 py-4 font-medium">Mã BS</th>
+                <th className="px-6 py-4 font-medium">Họ tên</th>
+                <th className="px-6 py-4 font-medium">Chuyên khoa</th>
+                <th className="px-6 py-4 font-medium">Liên hệ</th>
+                <th className="px-6 py-4 font-medium">Khoa</th>
+                <th className="px-6 py-4 font-medium text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredDoctors.map((doc) => (
-                <tr key={doc.id} className="hover:bg-slate-50/50 transition-colors group">
+              {loading ? (
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-sm text-slate-500">Đang tải dữ liệu...</td></tr>
+              ) : filteredDoctors.map((doc) => (
+                <tr key={doc.doctorId} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-medium">
-                    {doc.id}
+                    BS-{String(doc.doctorId).padStart(3, '0')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">
-                        {doc.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
+                        {doc.lastName?.charAt(0) || '?'}
                       </div>
-                      <span className="text-sm font-semibold text-slate-900">{doc.name}</span>
+                      <span className="text-sm font-semibold text-slate-900">{doc.fullName}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                    {doc.specialty}
+                    {doc.specialty || '—'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-slate-900">{doc.email}</div>
-                    <div className="text-xs text-slate-500">{doc.phone}</div>
+                    <div className="text-sm text-slate-900">{doc.phone || '—'}</div>
+                    <div className="text-xs text-slate-500">{doc.address || ''}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      doc.status === 'Active' 
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                        : doc.status === 'On Leave'
-                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                        : 'bg-slate-100 text-slate-700 border border-slate-200'
-                    }`}>
-                      {doc.status}
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      {doc.departmentName || 'Chưa phân khoa'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -110,7 +123,7 @@ export function DoctorsDirectory() {
             </tbody>
           </table>
           
-          {filteredDoctors.length === 0 && (
+          {filteredDoctors.length === 0 && !loading && (
             <div className="p-12 text-center">
               <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Search className="w-8 h-8 text-slate-400" />
@@ -122,7 +135,7 @@ export function DoctorsDirectory() {
         </div>
         
         <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-sm text-slate-500">
-          <div>Showing 1 to {filteredDoctors.length} of {mockDoctors.length} entries</div>
+          <div>Hiển thị 1 đến {filteredDoctors.length} trong {doctors.length} bác sĩ</div>
           <div className="flex gap-1">
             <button className="px-3 py-1 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50">Prev</button>
             <button className="px-3 py-1 bg-emerald-600 text-white rounded-md">1</button>
