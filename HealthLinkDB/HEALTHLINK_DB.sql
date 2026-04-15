@@ -60,7 +60,6 @@ CREATE TABLE PATIENT (
     PInsurance VARCHAR(20) -- Số bảo hiểm y tế
 );
 GO
-
 -- Đảm bảo giới tính chỉ nằm trong các giá trị xác định
 ALTER TABLE PATIENT
 ADD CONSTRAINT CHK_PSex CHECK (PSex IN (N'Nam', N'Nữ'));
@@ -132,8 +131,8 @@ CREATE TABLE APPOINTMENT (
     APStatus NVARCHAR(50) DEFAULT N'Chờ xác nhận',
     APReason NVARCHAR(MAX),
     APDateTimes DATETIME,
-    APCreatedAt DATETIME DEFAULT GETDATE(),
-    APCreatedAt DATETIME
+    APCreateAt DATETIME DEFAULT GETDATE(),
+    APUpdateAt DATETIME
 );
 GO
 -- Trạng thái cuộc hẹn chỉ bao gồm các bước quy định
@@ -142,7 +141,7 @@ ADD CONSTRAINT CHK_APStatus
 CHECK (APStatus IN (N'Chờ xác nhận', N'Đã xác nhận', N'Đang khám', N'Hoàn thành', N'Đã hủy'));
 -- Ngày hẹn không được là ngày trong quá khứ khi tạo mới
 ALTER TABLE APPOINTMENT
-ADD CONSTRAINT CHK_APDateTimes CHECK (APDateTimes >= APCreatedAt);
+ADD CONSTRAINT CHK_APDateTimes CHECK (APDateTimes >= APCreateAt);
 --Ràng buộc khóa ngoại giữa bảng lịch khám với bảng bác sĩ, ngăn xóa bác sĩ nếu bác sĩ đó đang có lịch hẹn với bệnh nhân để đảm bảo lịch sử khám
 ALTER TABLE APPOINTMENT
 ADD CONSTRAINT FK_Appointment_Doctor 

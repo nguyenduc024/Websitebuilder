@@ -261,22 +261,25 @@ public class ClinicManagerDAO {
 
 	// 7. Hiển thị danh sách lịch hẹn theo bác sĩ
 	public static class AppointmentInfo {
-		public int apId;
+		public int appointmentId;
 		public String patientName;
 		public String doctorName;
-		public String roomName;
+		public String clinicRoomName;
+		public String createdAt;
 		public String dateTime;
 		public String reason;
 		public String status;
 
-		public AppointmentInfo(int apId, String patientName, String roomName, String dateTime, String reason,
-				String status) {
-			this.apId = apId;
+		public AppointmentInfo(int appointmentId, String patientName, String doctorName, String clinicRoomName,
+				String dateTime, String reason, String status, String createdAt) {
+			this.appointmentId = appointmentId;
 			this.patientName = patientName;
-			this.roomName = roomName;
+			this.doctorName = doctorName;
+			this.clinicRoomName = clinicRoomName;
 			this.dateTime = dateTime;
 			this.reason = reason;
 			this.status = status;
+			this.createdAt = createdAt;
 		}
 	}
 
@@ -316,8 +319,11 @@ public class ClinicManagerDAO {
 	public List<AppointmentInfo> getAppointmentsByDoctor(int doctorId) {
 		List<AppointmentInfo> list = new ArrayList<>();
 		String sql = "SELECT a.APId, p.PLastName + ' ' + ISNULL(p.PMiddleName + ' ', '') + p.PFirstName AS PatientName, "
+				+ "d.DrLastName + ' ' + ISNULL(d.DrMiddleName + ' ', '') + d.DrFirstName AS DoctorName, "
 				+ "c.CRName, a.APDateTimes, a.APReason, a.APStatus " + "FROM APPOINTMENT a "
-				+ "JOIN PATIENT p ON a.PId = p.PId " + "JOIN CLINIC_ROOM c ON a.CRId = c.CRId " + "WHERE a.DrId = ? "
+				+ "JOIN PATIENT p ON a.PId = p.PId "
+				+ "JOIN DOCTOR d ON a.DrId = d.DrId "
+				+ "JOIN CLINIC_ROOM c ON a.CRId = c.CRId " + "WHERE a.DrId = ? "
 				+ "ORDER BY a.APDateTimes ASC"; // Sắp xếp giờ từ sớm đến muộn
 
 		try (Connection conn = DatabaseConnection.getConnection();
@@ -326,9 +332,16 @@ public class ClinicManagerDAO {
 			pstmt.setInt(1, doctorId);
 			try (ResultSet rs = pstmt.executeQuery()) {
 				while (rs.next()) {
-					list.add(new AppointmentInfo(rs.getInt("APId"), rs.getString("PatientName"), rs.getString("CRName"),
-							rs.getTimestamp("APDateTimes").toString(), rs.getString("APReason"),
-							rs.getString("APStatus")));
+					list.add(new AppointmentInfo(
+						rs.getInt("APId"),
+						rs.getString("PatientName"),
+						rs.getString("DoctorName"),
+						rs.getString("CRName"),
+						rs.getTimestamp("APDateTimes").toString(),
+						rs.getString("APReason"),
+						rs.getString("APStatus"),
+						rs.getTimestamp("APDateTimes").toString()
+					));
 				}
 			}
 		} catch (SQLException e) {
@@ -490,12 +503,16 @@ public class ClinicManagerDAO {
 				PreparedStatement pstmt = conn.prepareStatement(sql);
 				ResultSet rs = pstmt.executeQuery()) {
 			while (rs.next()) {
-				AppointmentInfo info = new AppointmentInfo(
-					rs.getInt("APId"), rs.getString("PatientName"), rs.getString("CRName"),
-					rs.getTimestamp("APDateTimes").toString(), rs.getString("APReason"), rs.getString("APStatus")
-				);
-				info.doctorName = rs.getString("DoctorName");
-				list.add(info);
+				list.add(new AppointmentInfo(
+					rs.getInt("APId"),
+					rs.getString("PatientName"),
+					rs.getString("DoctorName"),
+					rs.getString("CRName"),
+					rs.getTimestamp("APDateTimes").toString(),
+					rs.getString("APReason"),
+					rs.getString("APStatus"),
+					rs.getTimestamp("APDateTimes").toString()
+				));
 			}
 		} catch (SQLException e) {
 			System.err.println("Lỗi lấy tất cả lịch hẹn: " + e.getMessage());
@@ -507,17 +524,21 @@ public class ClinicManagerDAO {
 	public static class InvoiceInfo {
 		public int invoiceId;
 		public int appointmentId;
+		public Integer prescriptionId;
 		public String patientName;
+		public String doctorName;
 		public double totalPrice;
 		public String paymentMethod;
 		public String status;
 		public String paidDate;
 
-		public InvoiceInfo(int invoiceId, int appointmentId, String patientName, double totalPrice,
-				String paymentMethod, String status, String paidDate) {
+		public InvoiceInfo(int invoiceId, int appointmentId, Integer prescriptionId, String patientName,
+				String doctorName, double totalPrice, String paymentMethod, String status, String paidDate) {
 			this.invoiceId = invoiceId;
 			this.appointmentId = appointmentId;
+			this.prescriptionId = prescriptionId;
 			this.patientName = patientName;
+			this.doctorName = doctorName;
 			this.totalPrice = totalPrice;
 			this.paymentMethod = paymentMethod;
 			this.status = status;
@@ -527,11 +548,13 @@ public class ClinicManagerDAO {
 
 	public List<InvoiceInfo> getAllInvoices() {
 		List<InvoiceInfo> list = new ArrayList<>();
-		String sql = "SELECT i.INId, i.APId, "
+		String sql = "SELECT i.INId, i.APId, i.PRId, "
 				+ "p.PLastName + ' ' + ISNULL(p.PMiddleName + ' ', '') + p.PFirstName AS PatientName, "
+				+ "d.DrLastName + ' ' + ISNULL(d.DrMiddleName + ' ', '') + d.DrFirstName AS DoctorName, "
 				+ "i.INTotalPrice, i.INPaymentMethod, i.INStatus, i.INPaidDate "
 				+ "FROM INVOICE i "
 				+ "JOIN APPOINTMENT a ON i.APId = a.APId "
+				+ "JOIN DOCTOR d ON a.DrId = d.DrId "
 				+ "JOIN PATIENT p ON a.PId = p.PId "
 				+ "ORDER BY i.INId DESC";
 		try (Connection conn = DatabaseConnection.getConnection();
@@ -539,7 +562,8 @@ public class ClinicManagerDAO {
 				ResultSet rs = pstmt.executeQuery()) {
 			while (rs.next()) {
 				list.add(new InvoiceInfo(
-					rs.getInt("INId"), rs.getInt("APId"), rs.getString("PatientName"),
+					rs.getInt("INId"), rs.getInt("APId"), (Integer) rs.getObject("PRId"), rs.getString("PatientName"),
+					rs.getString("DoctorName"),
 					rs.getDouble("INTotalPrice"), rs.getString("INPaymentMethod"),
 					rs.getString("INStatus"),
 					rs.getTimestamp("INPaidDate") != null ? rs.getTimestamp("INPaidDate").toString() : null
@@ -555,14 +579,16 @@ public class ClinicManagerDAO {
 	public static class DashboardStats {
 		public int totalPatients;
 		public int totalDoctors;
+		public int totalAppointments;
 		public int todayAppointments;
 		public double totalRevenue;
 		public double pendingAmount;
 
-		public DashboardStats(int totalPatients, int totalDoctors, int todayAppointments, double totalRevenue, double pendingAmount) {
+		public DashboardStats(int totalPatients, int totalDoctors, int totalAppointments, double totalRevenue, double pendingAmount) {
 			this.totalPatients = totalPatients;
 			this.totalDoctors = totalDoctors;
-			this.todayAppointments = todayAppointments;
+			this.totalAppointments = totalAppointments;
+			this.todayAppointments = totalAppointments;
 			this.totalRevenue = totalRevenue;
 			this.pendingAmount = pendingAmount;
 		}
