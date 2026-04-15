@@ -9,8 +9,7 @@ import {
   AlertTriangle,
   FileText
 } from "lucide-react";
-
-const API_BASE = "http://localhost:8080/api";
+import { fetchApi, registerRefreshOnFocus } from "../lib/api";
 
 interface InvoiceData {
   invoiceId: number;
@@ -30,10 +29,31 @@ export function Billing() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/invoices`)
-      .then(res => res.json())
-      .then(data => { setInvoices(data); setLoading(false); })
-      .catch(() => setLoading(false));
+    let isActive = true;
+
+    const loadInvoices = async () => {
+      try {
+        const data = await fetchApi<InvoiceData[]>("/invoices");
+        if (isActive) {
+          setInvoices(data);
+        }
+      } catch {
+      } finally {
+        if (isActive) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadInvoices();
+    const cleanupRefresh = registerRefreshOnFocus(() => {
+      void loadInvoices();
+    });
+
+    return () => {
+      isActive = false;
+      cleanupRefresh();
+    };
   }, []);
 
   const getStatusColor = (status: string) => {

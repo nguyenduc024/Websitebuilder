@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Search, Plus, Filter, MoreHorizontal, User, Mail, Phone, Calendar } from "lucide-react";
-
-const API_BASE = "http://localhost:8080/api";
+import { fetchApi, registerRefreshOnFocus } from "../lib/api";
 
 interface PatientData {
   patientId: number;
@@ -22,10 +21,31 @@ export function PatientsHub() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/patients`)
-      .then(res => res.json())
-      .then(data => { setPatients(data); setLoading(false); })
-      .catch(() => setLoading(false));
+    let isActive = true;
+
+    const loadPatients = async () => {
+      try {
+        const data = await fetchApi<PatientData[]>("/patients");
+        if (isActive) {
+          setPatients(data);
+        }
+      } catch {
+      } finally {
+        if (isActive) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadPatients();
+    const cleanupRefresh = registerRefreshOnFocus(() => {
+      void loadPatients();
+    });
+
+    return () => {
+      isActive = false;
+      cleanupRefresh();
+    };
   }, []);
 
   const filteredPatients = patients.filter(patient => 

@@ -19,8 +19,7 @@ import {
   AreaChart,
   Area
 } from "recharts";
-
-const API_BASE = "http://localhost:8080/api";
+import { fetchApi, registerRefreshOnFocus } from "../lib/api";
 
 interface DashboardStats {
   totalPatients: number;
@@ -44,10 +43,31 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/dashboard/stats`)
-      .then(res => res.json())
-      .then(data => { setStats(data); setLoading(false); })
-      .catch(() => setLoading(false));
+    let isActive = true;
+
+    const loadStats = async () => {
+      try {
+        const data = await fetchApi<DashboardStats>("/dashboard/stats");
+        if (isActive) {
+          setStats(data);
+        }
+      } catch {
+      } finally {
+        if (isActive) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadStats();
+    const cleanupRefresh = registerRefreshOnFocus(() => {
+      void loadStats();
+    });
+
+    return () => {
+      isActive = false;
+      cleanupRefresh();
+    };
   }, []);
 
   const formatVND = (amount: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);

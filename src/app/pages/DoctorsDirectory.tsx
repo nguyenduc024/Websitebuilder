@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Search, Plus, Filter, MoreVertical, Edit, Trash2 } from "lucide-react";
-
-const API_BASE = "http://localhost:8080/api";
+import { fetchApi, registerRefreshOnFocus } from "../lib/api";
 
 interface DoctorData {
   doctorId: number;
@@ -23,10 +22,31 @@ export function DoctorsDirectory() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/doctors`)
-      .then(res => res.json())
-      .then(data => { setDoctors(data); setLoading(false); })
-      .catch(() => setLoading(false));
+    let isActive = true;
+
+    const loadDoctors = async () => {
+      try {
+        const data = await fetchApi<DoctorData[]>("/doctors");
+        if (isActive) {
+          setDoctors(data);
+        }
+      } catch {
+      } finally {
+        if (isActive) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadDoctors();
+    const cleanupRefresh = registerRefreshOnFocus(() => {
+      void loadDoctors();
+    });
+
+    return () => {
+      isActive = false;
+      cleanupRefresh();
+    };
   }, []);
 
   const filteredDoctors = doctors.filter(doc => 

@@ -11,8 +11,7 @@ import {
   RefreshCw,
   Settings
 } from "lucide-react";
-
-const API_BASE = "http://localhost:8080/api";
+import { fetchApi, registerRefreshOnFocus } from "../lib/api";
 
 interface AppointmentData {
   appointmentId: number;
@@ -31,10 +30,31 @@ export function Appointments() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/appointments`)
-      .then(res => res.json())
-      .then(data => { setAppointments(data); setLoading(false); })
-      .catch(() => setLoading(false));
+    let isActive = true;
+
+    const loadAppointments = async () => {
+      try {
+        const data = await fetchApi<AppointmentData[]>("/appointments");
+        if (isActive) {
+          setAppointments(data);
+        }
+      } catch {
+      } finally {
+        if (isActive) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadAppointments();
+    const cleanupRefresh = registerRefreshOnFocus(() => {
+      void loadAppointments();
+    });
+
+    return () => {
+      isActive = false;
+      cleanupRefresh();
+    };
   }, []);
 
   const statusMap: Record<string, string> = {

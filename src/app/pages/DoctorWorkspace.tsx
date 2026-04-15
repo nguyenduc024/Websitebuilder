@@ -11,8 +11,7 @@ import {
   AlertCircle,
   X
 } from "lucide-react";
-
-const API_BASE = "http://localhost:8080/api";
+import { fetchApi, registerRefreshOnFocus } from "../lib/api";
 
 interface QueueItem {
   appointmentId: number;
@@ -33,10 +32,31 @@ export function DoctorWorkspace() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/appointments`)
-      .then(res => res.json())
-      .then((data: QueueItem[]) => { setQueue(data); setLoading(false); })
-      .catch(() => setLoading(false));
+    let isActive = true;
+
+    const loadQueue = async () => {
+      try {
+        const data = await fetchApi<QueueItem[]>("/appointments");
+        if (isActive) {
+          setQueue(data);
+        }
+      } catch {
+      } finally {
+        if (isActive) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadQueue();
+    const cleanupRefresh = registerRefreshOnFocus(() => {
+      void loadQueue();
+    });
+
+    return () => {
+      isActive = false;
+      cleanupRefresh();
+    };
   }, []);
 
   const selectedPatient = queue[selectedPatientIdx] || null;
