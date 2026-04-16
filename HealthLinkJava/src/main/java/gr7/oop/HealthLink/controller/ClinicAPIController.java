@@ -76,7 +76,7 @@ public class ClinicAPIController {
 			boolean success = dao.bookAppointment(newAp);
 
 			if (success) {
-				return response("success", "🎉 Đặt lịch thành công!");
+				return response("success", "Đặt lịch thành công!");
 			} else {
 				return response("error", "Lỗi hệ thống khi lưu xuống Database.");
 			}
@@ -217,6 +217,41 @@ public class ClinicAPIController {
 				return response("success", "Thêm bác sĩ thành công!");
 			} else {
 				return response("error", "Lỗi hệ thống khi lưu bác sĩ.");
+			}
+		} catch (Exception e) {
+			return response("error", "Lỗi: " + e.getMessage());
+		}
+	}
+
+	// API: Thêm bệnh nhân mới
+	@PostMapping("/add-patient")
+	public Map<String, String> addPatient(@RequestBody Map<String, String> payload) {
+		try {
+			String firstName = payload.get("firstName");
+			String middleName = payload.get("middleName");
+			String lastName = payload.get("lastName");
+			String sex = payload.get("sex");
+			String phone = payload.get("phone");
+			String address = payload.get("address");
+			String insurance = payload.get("insurance");
+			String birthdayStr = payload.get("birthday");
+
+			if (firstName == null || firstName.isBlank() || lastName == null || lastName.isBlank()) {
+				return response("error", "Họ và tên không được để trống.");
+			}
+
+			java.sql.Date birthday = null;
+			if (birthdayStr != null && !birthdayStr.isBlank()) {
+				birthday = java.sql.Date.valueOf(birthdayStr);
+			}
+
+			Patient patient = new Patient(0, firstName, middleName, lastName, birthday, sex, phone, address, insurance);
+
+			boolean success = dao.addPatient(patient);
+			if (success) {
+				return response("success", "Thêm bệnh nhân thành công!");
+			} else {
+				return response("error", "Lỗi hệ thống khi lưu bệnh nhân.");
 			}
 		} catch (Exception e) {
 			return response("error", "Lỗi: " + e.getMessage());

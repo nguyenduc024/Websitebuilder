@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, Filter, MoreHorizontal, User, Mail, Phone, Calendar } from "lucide-react";
-import { fetchApi, registerRefreshOnFocus } from "../lib/api";
+import { Search, Plus, Filter, MoreHorizontal, User, Mail, Phone, Calendar, X, Loader2 } from "lucide-react";
+import { fetchApi, API_BASE, registerRefreshOnFocus } from "../lib/api";
 
 interface PatientData {
   patientId: number;
@@ -20,10 +20,27 @@ export function PatientsHub() {
   const [patients, setPatients] = useState<PatientData[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Add Patient modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
+  const [addMsg, setAddMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const EMPTY_FORM = { firstName: "", middleName: "", lastName: "", sex: "Nam", phone: "", address: "", insurance: "", birthday: "" };
+  const [addForm, setAddForm] = useState(EMPTY_FORM);
+
+  const loadPatients = async () => {
+    try {
+      const data = await fetchApi<PatientData[]>("/patients");
+      setPatients(data);
+    } catch {
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     let isActive = true;
 
-    const loadPatients = async () => {
+    const load = async () => {
       try {
         const data = await fetchApi<PatientData[]>("/patients");
         if (isActive) {
@@ -37,9 +54,9 @@ export function PatientsHub() {
       }
     };
 
-    void loadPatients();
+    void load();
     const cleanupRefresh = registerRefreshOnFocus(() => {
-      void loadPatients();
+      void load();
     });
 
     return () => {
@@ -47,6 +64,36 @@ export function PatientsHub() {
       cleanupRefresh();
     };
   }, []);
+
+  const openAddModal = () => {
+    setAddForm(EMPTY_FORM);
+    setAddMsg(null);
+    setShowAddModal(true);
+  };
+
+  const submitAddPatient = async () => {
+    setAddLoading(true);
+    setAddMsg(null);
+    try {
+      const res = await fetch(`${API_BASE}/add-patient`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(addForm),
+      });
+      const json = (await res.json()) as { status: string; message: string };
+      if (json.status === "success") {
+        setAddMsg({ type: "success", text: json.message });
+        void loadPatients();
+        setTimeout(() => setShowAddModal(false), 1000);
+      } else {
+        setAddMsg({ type: "error", text: json.message });
+      }
+    } catch {
+      setAddMsg({ type: "error", text: "Không thể kết nối server." });
+    } finally {
+      setAddLoading(false);
+    }
+  };
 
   const filteredPatients = patients.filter(patient => 
     patient.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -60,11 +107,78 @@ export function PatientsHub() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Patients Hub</h1>
           <p className="text-sm text-slate-500 mt-1">View and manage patient records securely.</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-200">
+        <button onClick={() => openAddModal()} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-200">
           <Plus className="w-4 h-4" />
           Add New Patient
         </button>
       </div>
+
+      {/* Add Patient Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6 relative animate-in fade-in zoom-in-95 duration-200">
+            <button onClick={() => setShowAddModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            <h2 className="text-lg font-bold text-slate-900 mb-4">Thêm bệnh nhân mới</h2>
+
+            {addMsg && (
+              <div className={`mb-4 px-3 py-2 rounded-lg text-sm ${addMsg.type === "success" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{addMsg.text}</div>
+            )}
+
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Họ *</label>
+                <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" value={addForm.firstName} onChange={e => setAddForm(f => ({ ...f, firstName: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Tên đệm</label>
+                <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" value={addForm.middleName} onChange={e => setAddForm(f => ({ ...f, middleName: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Tên *</label>
+                <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" value={addForm.lastName} onChange={e => setAddForm(f => ({ ...f, lastName: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Giới tính</label>
+                <select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" value={addForm.sex} onChange={e => setAddForm(f => ({ ...f, sex: e.target.value }))}>
+                  <option value="Nam">Nam</option>
+                  <option value="Nữ">Nữ</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Ngày sinh</label>
+                <input type="date" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" value={addForm.birthday} onChange={e => setAddForm(f => ({ ...f, birthday: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Số điện thoại</label>
+                <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">BHYT</label>
+                <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Số thẻ BHYT" value={addForm.insurance} onChange={e => setAddForm(f => ({ ...f, insurance: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Địa chỉ</label>
+              <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none" value={addForm.address} onChange={e => setAddForm(f => ({ ...f, address: e.target.value }))} />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowAddModal(false)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">Hủy</button>
+              <button onClick={() => void submitAddPatient()} disabled={addLoading} className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center gap-2">
+                {addLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                Thêm bệnh nhân
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-4 justify-between items-center bg-slate-50/50">
