@@ -139,42 +139,60 @@ public class ClinicAPIController {
 		}
 	}
 
-	// API: Bác sĩ khám và kê đơn thuốc (Transaction 3 bảng)
+	// API: Bác sĩ khám và kê đơn thuốc + tự động tạo hóa đơn (Transaction 5 bảng)
 	@PostMapping("/medical-record/create")
-	public Map<String, String> createMedicalRecord(@RequestBody MedicalProcessRequest req) {
+	public Map<String, Object> createMedicalRecord(@RequestBody MedicalProcessRequest req) {
+		Map<String, Object> result = new java.util.HashMap<>();
 		try {
+			// 0. Kiểm tra trạng thái lịch hẹn — chỉ cho phép "Đã xác nhận"
+			String apStatus = dao.getAppointmentStatus(req.appointmentId);
+			if (apStatus == null) {
+				result.put("status", "error");
+				result.put("message", "Không tìm thấy lịch hẹn #" + req.appointmentId);
+				return result;
+			}
+			if (!"Đã xác nhận".equals(apStatus)) {
+				result.put("status", "error");
+				result.put("message", "Lịch hẹn đang ở trạng thái \"" + apStatus + "\", không thể tạo hồ sơ.");
+				return result;
+			}
+
 			// 1. Chuyển đổi dữ liệu JSON từ request sang Object
 			Doctor doc = new Doctor(req.doctorId, null, null, null, null, null, null, null, null, null);
 			Patient pat = new Patient(req.patientId, null, null, null, null, null, null, null, null);
 
 			MedicalRecord mr = new MedicalRecord(0, doc, pat, req.appointmentId, req.diagnosis, req.method,
 					req.testResult);
-			Prescription pr = new Prescription(0, null, req.doctorNote, null); // mrId sẽ tự sinh trong DAO
+			Prescription pr = new Prescription(0, null, req.doctorNote, null);
 
-			// 2. CHUYỂN ĐỔI (MAP) DANH SÁCH THUỐC TỪ FRONTEND SANG OBJECT CHUẨN CỦA JAVA
+			// 2. Chuyển đổi danh sách thuốc từ Frontend sang Object chuẩn Java
 			List<PrescriptionDetail> details = new java.util.ArrayList<>();
 			for (MedicalProcessRequest.MedicineItem item : req.prescriptionDetails) {
-				// Tạo object Thuốc tạm (chỉ cần ID để lưu)
 				gr7.oop.HealthLink.entity.CategoryMedicine med = new gr7.oop.HealthLink.entity.CategoryMedicine(
 						item.medicineId, null, 0, 0.0, null);
-
-				// Đưa vào danh sách chi tiết
 				details.add(
 						new PrescriptionDetail(0, null, med, item.unitPrice, item.quantity, item.duration, item.guide));
 			}
 
-			// 3. Gọi DAO với ĐÚNG tên hàm của bạn và truyền danh sách 'details' đã được
-			// dịch
-			boolean success = dao.createMedicalRecordAndPrescription(mr, pr, details);
+			// 3. Gọi DAO Transaction (5 bảng: MEDICAL_RECORD, PRESCRIPTION, PRESCRIPTION_DETAIL, INVOICE, INVOICE_DETAIL)
+			ClinicManagerDAO.MedicalProcessResult processResult = dao.createMedicalRecordAndPrescription(mr, pr, details);
 
-			if (success) {
-				return response("success", "Đã lưu hồ sơ và kê đơn thành công!");
+			if (processResult != null) {
+				result.put("status", "success");
+				result.put("message", "Đã lưu hồ sơ, kê đơn và tạo hóa đơn thành công!");
+				result.put("mrId", processResult.mrId);
+				result.put("prId", processResult.prId);
+				result.put("invoiceId", processResult.invoiceId);
+				result.put("totalPrice", processResult.totalPrice);
 			} else {
-				return response("error", "Lỗi Transaction khi lưu vào Database.");
+				result.put("status", "error");
+				result.put("message", "Lỗi Transaction khi lưu vào Database.");
 			}
 		} catch (Exception e) {
-			return response("error", "Lỗi dữ liệu: " + e.getMessage());
+			result.put("status", "error");
+			result.put("message", "Lỗi dữ liệu: " + e.getMessage());
 		}
+		return result;
 	}
 
 	// API: Lấy chi tiết đơn thuốc
@@ -336,6 +354,38 @@ public class ClinicAPIController {
 		return dao.getAllInvoices();
 	}
 
+	// API: Xem chi tiết hóa đơn (bao gồm thuốc, bệnh nhân, bác sĩ)
+	@GetMapping("/invoices/{id}")
+	public Object getInvoiceDetail(@PathVariable int id) {
+		ClinicManagerDAO.InvoiceDetailInfo detail = dao.getInvoiceDetail(id);
+		if (detail == null) {
+			return response("error", "Không tìm thấy hóa đơn #" + id);
+		}
+		return detail;
+	}
+
+	// API: Thanh toán hóa đơn
+	@PutMapping("/invoices/{id}/pay")
+	public Map<String, String> payInvoice(@PathVariable int id, @RequestBody Map<String, String> payload) {
+		String paymentMethod = payload.get("paymentMethod");
+		if (paymentMethod == null || paymentMethod.isBlank()) {
+			return response("error", "Vui lòng chọn phương thức thanh toán.");
+		}
+		// Kiểm tra hóa đơn tồn tại và đang ở trạng thái chưa thanh toán
+		ClinicManagerDAO.InvoiceDetailInfo invoice = dao.getInvoiceDetail(id);
+		if (invoice == null) {
+			return response("error", "Không tìm thấy hóa đơn #" + id);
+		}
+		if ("Đã thanh toán".equals(invoice.status)) {
+			return response("error", "Hóa đơn #" + id + " đã được thanh toán trước đó.");
+		}
+		boolean success = dao.payInvoice(id, paymentMethod);
+		if (success) {
+			return response("success", "Thanh toán hóa đơn #" + id + " thành công!");
+		}
+		return response("error", "Lỗi khi thanh toán hóa đơn.");
+	}
+
 	@GetMapping("/dashboard/stats")
 	public DashboardStats getDashboardStats() {
 		return dao.getDashboardStats();
@@ -359,5 +409,11 @@ public class ClinicAPIController {
 	@GetMapping("/medicines")
 	public List<MedicineInfo> getAllMedicines() {
 		return dao.getAllMedicines();
+	}
+
+	// Xếp hạng bác sĩ theo số lịch hẹn giảm dần - Giải thuật Heap Sort O(n log n)
+	@GetMapping("/doctor-ranking")
+	public List<ClinicManagerDAO.DoctorAppointmentRanking> getDoctorRanking() {
+		return dao.getDoctorRankingByHeapSort();
 	}
 }

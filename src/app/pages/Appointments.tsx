@@ -12,7 +12,10 @@ import {
   Settings,
   Search,
   X,
-  Loader2
+  Loader2,
+  BarChart3,
+  Trophy,
+  Medal
 } from "lucide-react";
 import { fetchApi, API_BASE, registerRefreshOnFocus } from "../lib/api";
 
@@ -31,21 +34,29 @@ interface DoctorBasic {
   fullName: string;
 }
 
+// DTO từ backend - đã được sắp xếp bằng Heap Sort ở Java
+interface DoctorRankingItem {
+  rank: number;
+  doctorName: string;
+  appointmentCount: number;
+}
+
 export function Appointments() {
-  const [selectedDate, setSelectedDate] = useState(new Date());
   const [appointments, setAppointments] = useState<AppointmentData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedDoctor, setSelectedDoctor] = useState<string>("Tất cả");
-  const [doctorSearch, setDoctorSearch] = useState("");
   const [allDoctorNames, setAllDoctorNames] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedDoctor, setSelectedDoctor] = useState("Tất cả");
+  const [doctorSearch, setDoctorSearch] = useState("");
   const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [rescheduleModal, setRescheduleModal] = useState<{ apId: number; patientName: string; oldDateTime: string } | null>(null);
   const [newDateTime, setNewDateTime] = useState("");
+  const [showDoctorRanking, setShowDoctorRanking] = useState(false);
+  const [doctorRanking, setDoctorRanking] = useState<DoctorRankingItem[]>([]);
+  const [rankingLoading, setRankingLoading] = useState(false);
 
   useEffect(() => {
     let isActive = true;
-
     const loadData = async () => {
       try {
         const [apData, drData] = await Promise.all([
@@ -63,17 +74,23 @@ export function Appointments() {
         }
       }
     };
-
     void loadData();
-    const cleanupRefresh = registerRefreshOnFocus(() => {
-      void loadData();
-    });
-
-    return () => {
-      isActive = false;
-      cleanupRefresh();
-    };
+    const unregister = registerRefreshOnFocus(() => void loadData());
+    return () => { isActive = false; unregister(); };
   }, []);
+
+  // Gọi API backend để lấy xếp hạng (đã sort bằng Heap Sort ở Java)
+  const loadDoctorRanking = async () => {
+    setRankingLoading(true);
+    try {
+      const data = await fetchApi<DoctorRankingItem[]>("/doctor-ranking");
+      setDoctorRanking(data);
+    } catch {
+      showToast("error", "Không thể tải xếp hạng bác sĩ.");
+    } finally {
+      setRankingLoading(false);
+    }
+  };
 
   const showToast = (type: "success" | "error", text: string) => {
     setToast({ type, text });
@@ -204,6 +221,13 @@ export function Appointments() {
           <p className="text-sm text-slate-500 mt-1">Quản lý lịch hẹn khám bệnh hàng ngày.</p>
         </div>
         <div className="flex gap-2">
+          <button
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+            onClick={() => { setShowDoctorRanking(true); void loadDoctorRanking(); }}
+          >
+            <BarChart3 className="w-4 h-4" />
+            Xếp hạng BS
+          </button>
           <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
             <Settings className="w-4 h-4" />
             Giờ làm việc
@@ -402,6 +426,110 @@ export function Appointments() {
                 {actionLoading !== null && <Loader2 className="w-4 h-4 animate-spin" />}
                 Xác nhận dời lịch
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====== DOCTOR RANKING MODAL (Heap Sort) ====== */}
+      {showDoctorRanking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowDoctorRanking(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden mx-4 animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-blue-50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <BarChart3 className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Xếp hạng bác sĩ</h2>
+                  <p className="text-xs text-slate-500">Sắp xếp giảm dần theo số lịch hẹn (Heap Sort)</p>
+                </div>
+              </div>
+              <button onClick={() => setShowDoctorRanking(false)} className="p-1.5 hover:bg-white/80 rounded-lg transition-colors">
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            {/* Ranking List */}
+            <div className="p-6 overflow-y-auto max-h-[calc(85vh-88px)]">
+              {rankingLoading ? (
+                <div className="text-center py-12 text-sm text-slate-500 flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Đang tải xếp hạng...
+                </div>
+              ) : doctorRanking.length === 0 ? (
+                <div className="text-center py-12 text-sm text-slate-400">Chưa có dữ liệu lịch hẹn.</div>
+              ) : (
+                <div className="space-y-3">
+                  {doctorRanking.map((doc) => {
+                    const rank = doc.rank;
+                    const isTop3 = rank <= 3;
+                    const medalColors = [
+                      "from-yellow-400 to-amber-500 text-white shadow-amber-200",
+                      "from-slate-300 to-slate-400 text-white shadow-slate-200",
+                      "from-orange-400 to-orange-500 text-white shadow-orange-200",
+                    ];
+                    const barMaxWidth = doctorRanking[0]?.appointmentCount || 1;
+                    const barPercent = Math.round((doc.appointmentCount / barMaxWidth) * 100);
+
+                    return (
+                      <div
+                        key={doc.doctorName}
+                        className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${
+                          isTop3
+                            ? "border-emerald-200 bg-emerald-50/50 hover:shadow-md"
+                            : "border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm"
+                        }`}
+                      >
+                        {/* Rank Badge */}
+                        <div className="shrink-0">
+                          {isTop3 ? (
+                            <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${medalColors[rank - 1]} flex items-center justify-center font-bold text-sm shadow-md`}>
+                              {rank === 1 ? <Trophy className="w-5 h-5" /> : <Medal className="w-5 h-5" />}
+                            </div>
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-500">
+                              {rank}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Doctor Info + Bar */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <p className={`text-sm font-semibold truncate ${isTop3 ? "text-slate-900" : "text-slate-700"}`}>
+                              {doc.doctorName}
+                            </p>
+                            <span className={`text-sm font-bold shrink-0 ml-3 ${isTop3 ? "text-emerald-700" : "text-slate-600"}`}>
+                              {doc.appointmentCount} lịch hẹn
+                            </span>
+                          </div>
+                          {/* Progress Bar */}
+                          <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-700 ${
+                                rank === 1 ? "bg-gradient-to-r from-emerald-400 to-emerald-600" :
+                                rank === 2 ? "bg-gradient-to-r from-blue-400 to-blue-500" :
+                                rank === 3 ? "bg-gradient-to-r from-amber-400 to-amber-500" :
+                                "bg-slate-300"
+                              }`}
+                              style={{ width: `${barPercent}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Algorithm note */}
+                  <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <p className="text-xs text-slate-500 text-center">
+                      Thuật toán: <span className="font-semibold text-slate-700">Heap Sort (Java Backend)</span> — Độ phức tạp: O(n log n)
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

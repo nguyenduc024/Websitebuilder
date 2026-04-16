@@ -1,7 +1,9 @@
 gr7\oop\HealthLink\controller\MedicalProcessRequest$MedicineItem.class
 gr7\oop\HealthLink\entity\ClinicRoom.class
+gr7\oop\HealthLink\dao\ClinicManagerDAO$InvoiceDetailInfo.class
 gr7\oop\HealthLink\entity\PrescriptionDetail.class
 gr7\oop\HealthLink\entity\Doctor.class
+gr7\oop\HealthLink\dao\ClinicManagerDAO$InvoiceMedicineItem.class
 gr7\oop\HealthLink\entity\Department.class
 gr7\oop\HealthLink\entity\InvoiceDetail.class
 gr7\oop\HealthLink\dao\ClinicManagerDAO$WorkScheduleInfo.class
@@ -29,3 +31,4 @@ gr7\oop\HealthLink\exception\DuplicateAppointmentException.class
 gr7\oop\HealthLink\entity\Patient.class
 gr7\oop\HealthLink\entity\CategoryMedicine.class
 gr7\oop\HealthLink\entity\Invoice.class
+gr7\oop\HealthLink\dao\ClinicManagerDAO$MedicalProcessResult.class

@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import gr7.oop.HealthLink.DatabaseConnection;
+import gr7.oop.HealthLink.algorithm.HeapSort;
 import gr7.oop.HealthLink.entity.Appointment;
 import gr7.oop.HealthLink.entity.CategoryMedicine;
 import gr7.oop.HealthLink.entity.Department;
@@ -86,13 +87,26 @@ public class ClinicManagerDAO {
 		return executeUpdate(sql, status, apId);
 	}
 
+	// 2.3 Lấy trạng thái lịch hẹn
+	public String getAppointmentStatus(int apId) {
+		String sql = "SELECT APStatus FROM APPOINTMENT WHERE APId = ?";
+		try (Connection conn = DatabaseConnection.getConnection();
+			 PreparedStatement ps = conn.prepareStatement(sql)) {
+			ps.setInt(1, apId);
+			ResultSet rs = ps.executeQuery();
+			return rs.next() ? rs.getString("APStatus") : null;
+		} catch (SQLException e) {
+			throw new RuntimeException("Lỗi truy vấn trạng thái lịch hẹn: " + e.getMessage(), e);
+		}
+	}
+
 	public boolean rescheduleAppointment(int apId, java.sql.Timestamp newDateTime) {
 		String sql = "UPDATE APPOINTMENT SET APDateTimes = ?, APStatus = N'Chờ xác nhận', APUpdateAt = GETDATE() WHERE APId = ?";
 		return executeUpdate(sql, newDateTime, apId);
 	}
 
-	// 3. Tạo hồ sơ bệnh án và kê đơn
-	public boolean createMedicalRecordAndPrescription(MedicalRecord mr, Prescription pr,
+	// 3. Tạo hồ sơ bệnh án, kê đơn thuốc VÀ tự động tạo hóa đơn (Transaction 5 bảng)
+	public MedicalProcessResult createMedicalRecordAndPrescription(MedicalRecord mr, Prescription pr,
 			List<PrescriptionDetail> details) {
 		Connection conn = null;
 		try {
@@ -100,60 +114,73 @@ public class ClinicManagerDAO {
 			// Bật chế độ Transaction
 			conn.setAutoCommit(false);
 
-			// Bảng 1: Tạo hồ sơ bệnh án
+			// Bảng 1: Tạo hồ sơ bệnh án (MEDICAL_RECORD)
 			String sqlMR = "INSERT INTO MEDICAL_RECORD (DrId, PId, APId, MRDiagnosis, MRMethod, MRTestResult) VALUES (?, ?, ?, ?, ?, ?)";
-			// preparedStatement dùng để bảo mật thông tin an toàn hơn so với sử dụng
-			// Statement
 			PreparedStatement psMR = conn.prepareStatement(sqlMR, Statement.RETURN_GENERATED_KEYS);
-			// nhập thông tin cho hồ sơ bệnh án
 			psMR.setInt(1, mr.getDoctor().getId());
 			psMR.setInt(2, mr.getPatient().getId());
 			psMR.setInt(3, mr.getAppointmentId());
 			psMR.setString(4, mr.getDiagnosis());
 			psMR.setString(5, mr.getMethod());
 			psMR.setString(6, mr.getTestResult());
-			// thực thi câu lệnh
 			psMR.executeUpdate();
-			// resultSet dùng để lưu trữ và truy xuất kết quả của một câu lệnh truy vấn SQL
 			ResultSet rsMR = psMR.getGeneratedKeys();
 			int mrId = rsMR.next() ? rsMR.getInt(1) : -1;
 
-			// Bảng 2: Tạo đơn thuốc dựa trên Hồ sơ vừa tạo
+			// Bảng 2: Tạo đơn thuốc (PRESCRIPTION)
 			String sqlPR = "INSERT INTO PRESCRIPTION (MRId, PRDoctorNote) VALUES (?, ?)";
 			PreparedStatement psPR = conn.prepareStatement(sqlPR, Statement.RETURN_GENERATED_KEYS);
 			psPR.setInt(1, mrId);
 			psPR.setString(2, pr.getDoctorNote());
 			psPR.executeUpdate();
-
 			ResultSet rsPR = psPR.getGeneratedKeys();
 			int prId = rsPR.next() ? rsPR.getInt(1) : -1;
 
-			// Bảng 3: Thêm chi tiết các loại thuốc vào đơn
+			// Bảng 3: Thêm chi tiết các loại thuốc vào đơn (PRESCRIPTION_DETAIL)
 			String sqlDet = "INSERT INTO PRESCRIPTION_DETAIL (PRId, CMId, PDUnitPrice, PDQuantity, PDDuration, PDGuide) VALUES (?, ?, ?, ?, ?, ?)";
 			PreparedStatement psDet = conn.prepareStatement(sqlDet);
+			double totalPrice = 0;
 			for (PrescriptionDetail det : details) {
-				// nhập thông tin cho chi tiết đơn thuốc
 				psDet.setInt(1, prId);
 				psDet.setInt(2, det.getMedicine().getCmId());
 				psDet.setDouble(3, det.getUnitPrice());
 				psDet.setInt(4, det.getQuantity());
 				psDet.setInt(5, det.getDuration());
 				psDet.setString(6, det.getGuide());
-				psDet.addBatch(); // Gom lại thành cụm để chạy 1 lần cho nhanh
+				psDet.addBatch();
+				totalPrice += det.getUnitPrice() * det.getQuantity();
 			}
 			psDet.executeBatch();
 
+			// Bảng 4: Tự động tạo hóa đơn (INVOICE)
+			String sqlInv = "INSERT INTO INVOICE (APId, PRId, INTotalPrice, INPaymentMethod, INStatus) VALUES (?, ?, ?, NULL, N'Chưa thanh toán')";
+			PreparedStatement psInv = conn.prepareStatement(sqlInv, Statement.RETURN_GENERATED_KEYS);
+			psInv.setInt(1, mr.getAppointmentId());
+			psInv.setInt(2, prId);
+			psInv.setDouble(3, totalPrice);
+			psInv.executeUpdate();
+			ResultSet rsInv = psInv.getGeneratedKeys();
+			int invoiceId = rsInv.next() ? rsInv.getInt(1) : -1;
+
+			// Bảng 5: Tạo chi tiết hóa đơn (INVOICE_DETAIL)
+			String sqlInvDet = "INSERT INTO INVOICE_DETAIL (INId, INDMedicinePrice, INDPatientPaid, INDInsurancePaid) VALUES (?, ?, 0, 0)";
+			PreparedStatement psInvDet = conn.prepareStatement(sqlInvDet);
+			psInvDet.setInt(1, invoiceId);
+			psInvDet.setDouble(2, totalPrice);
+			psInvDet.executeUpdate();
+
 			// Đổi trạng thái lịch hẹn thành 'Hoàn thành'
-			String updateApSql = "UPDATE APPOINTMENT SET APStatus = N'Hoàn thành' WHERE APId = ?";
+			String updateApSql = "UPDATE APPOINTMENT SET APStatus = N'Hoàn thành', APUpdateAt = GETDATE() WHERE APId = ?";
 			PreparedStatement psUpdateAp = conn.prepareStatement(updateApSql);
 			psUpdateAp.setInt(1, mr.getAppointmentId());
 			psUpdateAp.executeUpdate();
 
 			conn.commit(); // Tất cả đều ổn -> Lưu xuống Database
-			return true;
+			return new MedicalProcessResult(mrId, prId, invoiceId, totalPrice);
 
 		} catch (SQLException e) {
 			System.err.println("Transaction thất bại, đang Rollback... Lỗi: " + e.getMessage());
+			e.printStackTrace();
 			if (conn != null) {
 				try {
 					conn.rollback();
@@ -161,7 +188,7 @@ public class ClinicManagerDAO {
 					ex.printStackTrace();
 				}
 			}
-			return false;
+			throw new RuntimeException("SQL Error: " + e.getMessage(), e);
 		} finally {
 			if (conn != null) {
 				try {
@@ -274,6 +301,8 @@ public class ClinicManagerDAO {
 	// 7. Hiển thị danh sách lịch hẹn theo bác sĩ
 	public static class AppointmentInfo {
 		public int appointmentId;
+		public int patientId;
+		public int doctorId;
 		public String patientName;
 		public String doctorName;
 		public String clinicRoomName;
@@ -282,9 +311,11 @@ public class ClinicManagerDAO {
 		public String reason;
 		public String status;
 
-		public AppointmentInfo(int appointmentId, String patientName, String doctorName, String clinicRoomName,
+		public AppointmentInfo(int appointmentId, int patientId, int doctorId, String patientName, String doctorName, String clinicRoomName,
 				String dateTime, String reason, String status, String createdAt) {
 			this.appointmentId = appointmentId;
+			this.patientId = patientId;
+			this.doctorId = doctorId;
 			this.patientName = patientName;
 			this.doctorName = doctorName;
 			this.clinicRoomName = clinicRoomName;
@@ -292,6 +323,21 @@ public class ClinicManagerDAO {
 			this.reason = reason;
 			this.status = status;
 			this.createdAt = createdAt;
+		}
+	}
+
+	// Kết quả trả về từ transaction tạo hồ sơ bệnh án
+	public static class MedicalProcessResult {
+		public int mrId;
+		public int prId;
+		public int invoiceId;
+		public double totalPrice;
+
+		public MedicalProcessResult(int mrId, int prId, int invoiceId, double totalPrice) {
+			this.mrId = mrId;
+			this.prId = prId;
+			this.invoiceId = invoiceId;
+			this.totalPrice = totalPrice;
 		}
 	}
 
@@ -330,7 +376,7 @@ public class ClinicManagerDAO {
 
 	public List<AppointmentInfo> getAppointmentsByDoctor(int doctorId) {
 		List<AppointmentInfo> list = new ArrayList<>();
-		String sql = "SELECT a.APId, p.PLastName + ' ' + ISNULL(p.PMiddleName + ' ', '') + p.PFirstName AS PatientName, "
+		String sql = "SELECT a.APId, a.PId, a.DrId, p.PLastName + ' ' + ISNULL(p.PMiddleName + ' ', '') + p.PFirstName AS PatientName, "
 				+ "d.DrLastName + ' ' + ISNULL(d.DrMiddleName + ' ', '') + d.DrFirstName AS DoctorName, "
 				+ "c.CRName, a.APDateTimes, a.APReason, a.APStatus " + "FROM APPOINTMENT a "
 				+ "JOIN PATIENT p ON a.PId = p.PId "
@@ -346,6 +392,8 @@ public class ClinicManagerDAO {
 				while (rs.next()) {
 					list.add(new AppointmentInfo(
 						rs.getInt("APId"),
+						rs.getInt("PId"),
+						rs.getInt("DrId"),
 						rs.getString("PatientName"),
 						rs.getString("DoctorName"),
 						rs.getString("CRName"),
@@ -502,7 +550,7 @@ public class ClinicManagerDAO {
 	// Lấy tất cả lịch hẹn
 	public List<AppointmentInfo> getAllAppointments() {
 		List<AppointmentInfo> list = new ArrayList<>();
-		String sql = "SELECT a.APId, "
+		String sql = "SELECT a.APId, a.PId, a.DrId, "
 				+ "p.PLastName + ' ' + ISNULL(p.PMiddleName + ' ', '') + p.PFirstName AS PatientName, "
 				+ "d.DrLastName + ' ' + ISNULL(d.DrMiddleName + ' ', '') + d.DrFirstName AS DoctorName, "
 				+ "c.CRName, a.APDateTimes, a.APReason, a.APStatus "
@@ -517,6 +565,8 @@ public class ClinicManagerDAO {
 			while (rs.next()) {
 				list.add(new AppointmentInfo(
 					rs.getInt("APId"),
+					rs.getInt("PId"),
+					rs.getInt("DrId"),
 					rs.getString("PatientName"),
 					rs.getString("DoctorName"),
 					rs.getString("CRName"),
@@ -585,6 +635,126 @@ public class ClinicManagerDAO {
 			System.err.println("Lỗi lấy danh sách hóa đơn: " + e.getMessage());
 		}
 		return list;
+	}
+
+	// Chi tiết hóa đơn đầy đủ (dùng cho trang Billing)
+	public static class InvoiceDetailInfo {
+		public int invoiceId;
+		public int appointmentId;
+		public Integer prescriptionId;
+		public String patientName;
+		public String patientPhone;
+		public String patientInsurance;
+		public String doctorName;
+		public String doctorSpecialty;
+		public String diagnosis;
+		public String doctorNote;
+		public double totalPrice;
+		public String paymentMethod;
+		public String status;
+		public String paidDate;
+		public String createdAt;
+		public List<InvoiceMedicineItem> medicines;
+
+		public InvoiceDetailInfo() {
+			this.medicines = new java.util.ArrayList<>();
+		}
+	}
+
+	public static class InvoiceMedicineItem {
+		public String medicineName;
+		public double unitPrice;
+		public int quantity;
+		public int duration;
+		public String guide;
+		public double subtotal;
+
+		public InvoiceMedicineItem(String medicineName, double unitPrice, int quantity, int duration, String guide) {
+			this.medicineName = medicineName;
+			this.unitPrice = unitPrice;
+			this.quantity = quantity;
+			this.duration = duration;
+			this.guide = guide;
+			this.subtotal = unitPrice * quantity;
+		}
+	}
+
+	public InvoiceDetailInfo getInvoiceDetail(int invoiceId) {
+		InvoiceDetailInfo info = null;
+		String sql = "SELECT i.INId, i.APId, i.PRId, i.INTotalPrice, i.INPaymentMethod, i.INStatus, i.INPaidDate, "
+				+ "p.PLastName + ' ' + ISNULL(p.PMiddleName + ' ', '') + p.PFirstName AS PatientName, "
+				+ "p.PPhone, p.PInsurance, "
+				+ "d.DrLastName + ' ' + ISNULL(d.DrMiddleName + ' ', '') + d.DrFirstName AS DoctorName, "
+				+ "d.DrSpecialty, "
+				+ "mr.MRDiagnosis, pr.PRDoctorNote, pr.PRCreatedAt "
+				+ "FROM INVOICE i "
+				+ "JOIN APPOINTMENT a ON i.APId = a.APId "
+				+ "JOIN PATIENT p ON a.PId = p.PId "
+				+ "JOIN DOCTOR d ON a.DrId = d.DrId "
+				+ "LEFT JOIN PRESCRIPTION pr ON i.PRId = pr.PRId "
+				+ "LEFT JOIN MEDICAL_RECORD mr ON pr.MRId = mr.MRId "
+				+ "WHERE i.INId = ?";
+
+		try (Connection conn = DatabaseConnection.getConnection();
+			 PreparedStatement ps = conn.prepareStatement(sql)) {
+			ps.setInt(1, invoiceId);
+			try (ResultSet rs = ps.executeQuery()) {
+				if (rs.next()) {
+					info = new InvoiceDetailInfo();
+					info.invoiceId = rs.getInt("INId");
+					info.appointmentId = rs.getInt("APId");
+					info.prescriptionId = (Integer) rs.getObject("PRId");
+					info.totalPrice = rs.getDouble("INTotalPrice");
+					info.paymentMethod = rs.getString("INPaymentMethod");
+					info.status = rs.getString("INStatus");
+					info.paidDate = rs.getTimestamp("INPaidDate") != null ? rs.getTimestamp("INPaidDate").toString() : null;
+					info.patientName = rs.getString("PatientName");
+					info.patientPhone = rs.getString("PPhone");
+					info.patientInsurance = rs.getString("PInsurance");
+					info.doctorName = rs.getString("DoctorName");
+					info.doctorSpecialty = rs.getString("DrSpecialty");
+					info.diagnosis = rs.getString("MRDiagnosis");
+					info.doctorNote = rs.getString("PRDoctorNote");
+					info.createdAt = rs.getTimestamp("PRCreatedAt") != null ? rs.getTimestamp("PRCreatedAt").toString() : null;
+				}
+			}
+		} catch (SQLException e) {
+			System.err.println("Lỗi lấy chi tiết hóa đơn: " + e.getMessage());
+			return null;
+		}
+
+		// Lấy danh sách thuốc trong đơn
+		if (info != null && info.prescriptionId != null) {
+			String medSql = "SELECT cm.CMName, pd.PDUnitPrice, pd.PDQuantity, pd.PDDuration, pd.PDGuide "
+					+ "FROM PRESCRIPTION_DETAIL pd "
+					+ "JOIN CATEGORY_MEDICINE cm ON pd.CMId = cm.CMId "
+					+ "WHERE pd.PRId = ?";
+			try (Connection conn = DatabaseConnection.getConnection();
+				 PreparedStatement ps = conn.prepareStatement(medSql)) {
+				ps.setInt(1, info.prescriptionId);
+				try (ResultSet rs = ps.executeQuery()) {
+					while (rs.next()) {
+						info.medicines.add(new InvoiceMedicineItem(
+							rs.getString("CMName"),
+							rs.getDouble("PDUnitPrice"),
+							rs.getInt("PDQuantity"),
+							rs.getInt("PDDuration"),
+							rs.getString("PDGuide")
+						));
+					}
+				}
+			} catch (SQLException e) {
+				System.err.println("Lỗi lấy thuốc trong hóa đơn: " + e.getMessage());
+			}
+		}
+
+		return info;
+	}
+
+	// Thanh toán hóa đơn
+	public boolean payInvoice(int invoiceId, String paymentMethod) {
+		String sql = "UPDATE INVOICE SET INStatus = N'Đã thanh toán', INPaymentMethod = ?, INPaidDate = GETDATE() WHERE INId = ? AND INStatus = N'Chưa thanh toán'";
+		return executeUpdate(sql, paymentMethod, invoiceId);
 	}
 
 	// Thống kê cho Dashboard
@@ -838,6 +1008,60 @@ public class ClinicManagerDAO {
 		} catch (SQLException e) {
 			System.err.println("Lỗi lấy danh sách thuốc: " + e.getMessage());
 		}
+		return list;
+	}
+
+	// ===== Xếp hạng bác sĩ theo số lịch hẹn - Giải thuật Heap Sort =====
+
+	// DTO chứa thông tin xếp hạng bác sĩ
+	public static class DoctorAppointmentRanking {
+		public int rank;
+		public String doctorName;
+		public int appointmentCount;
+
+		public DoctorAppointmentRanking(int rank, String doctorName, int appointmentCount) {
+			this.rank = rank;
+			this.doctorName = doctorName;
+			this.appointmentCount = appointmentCount;
+		}
+	}
+
+	/**
+	 * Đếm số lịch hẹn mỗi bác sĩ từ DB, sau đó dùng giải thuật Heap Sort
+	 * để sắp xếp theo thứ tự giảm dần (bác sĩ nhiều lịch hẹn nhất đứng đầu).
+	 */
+	public List<DoctorAppointmentRanking> getDoctorRankingByHeapSort() {
+		// Bước 1: Truy vấn đếm số lịch hẹn mỗi bác sĩ
+		List<DoctorAppointmentRanking> list = new ArrayList<>();
+		String sql = "SELECT CONCAT(d.DrLastName, ' ', ISNULL(d.DrMiddleName + ' ', ''), d.DrFirstName) AS DoctorName, "
+				+ "COUNT(a.APId) AS AppointmentCount "
+				+ "FROM DOCTOR d "
+				+ "LEFT JOIN APPOINTMENT a ON d.DrId = a.DrId "
+				+ "GROUP BY d.DrLastName, d.DrMiddleName, d.DrFirstName "
+				+ "HAVING COUNT(a.APId) > 0";
+
+		try (Connection conn = DatabaseConnection.getConnection();
+			 PreparedStatement ps = conn.prepareStatement(sql);
+			 ResultSet rs = ps.executeQuery()) {
+			while (rs.next()) {
+				// rank = 0 tạm thời, sẽ gán sau khi sắp xếp
+				list.add(new DoctorAppointmentRanking(
+					0, rs.getString("DoctorName"), rs.getInt("AppointmentCount")
+				));
+			}
+		} catch (SQLException e) {
+			System.err.println("Lỗi lấy xếp hạng bác sĩ: " + e.getMessage());
+		}
+
+		// Bước 2: Áp dụng giải thuật Heap Sort sắp xếp giảm dần theo appointmentCount
+		HeapSort<DoctorAppointmentRanking> heapSort = new HeapSort<>(item -> item.appointmentCount);
+		heapSort.sortDescending(list);
+
+		// Bước 3: Gán thứ hạng sau khi đã sắp xếp
+		for (int i = 0; i < list.size(); i++) {
+			list.get(i).rank = i + 1;
+		}
+
 		return list;
 	}
 
