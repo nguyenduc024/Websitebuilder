@@ -69,13 +69,14 @@ public class ClinicManagerDAO {
 			insertStmt.setString(5, ap.getApReason());
 			insertStmt.setTimestamp(6, ap.getApDateTimes());
 
-			if (insertStmt.executeUpdate() > 0)
+			int rows = insertStmt.executeUpdate();
+			if (rows > 0)
 				System.out.println("✅ THÔNG BÁO: Lịch hẹn đã được hệ thống xác nhận!");
-			return insertStmt.executeUpdate() > 0;
+			return rows > 0;
 
 		} catch (SQLException e) {
 			System.err.println("Lỗi thao tác Database: " + e.getMessage());
-			return false;
+			throw new RuntimeException("Lỗi Database: " + e.getMessage(), e);
 		}
 	}
 
@@ -629,6 +630,59 @@ public class ClinicManagerDAO {
 		}
 
 		return new DashboardStats(totalPatients, totalDoctors, todayAppointments, totalRevenue, pendingAmount);
+	}
+
+	// DTO cho lượt khám theo ngày trong tuần
+	public static class DailyVisitCount {
+		public String day;
+		public int patients;
+
+		public DailyVisitCount(String day, int patients) {
+			this.day = day;
+			this.patients = patients;
+		}
+	}
+
+	// Lấy lượt khám theo từng ngày trong tuần hiện tại hoặc tuần trước
+	public List<DailyVisitCount> getWeeklyVisits(String week) {
+		List<DailyVisitCount> result = new ArrayList<>();
+		String sql = "DECLARE @startOfWeek DATE; "
+				+ "SET DATEFIRST 1; "
+				+ "IF ? = 'current' "
+				+ "  SET @startOfWeek = DATEADD(DAY, 1 - DATEPART(WEEKDAY, GETDATE()), CAST(GETDATE() AS DATE)); "
+				+ "ELSE "
+				+ "  SET @startOfWeek = DATEADD(DAY, 1 - DATEPART(WEEKDAY, GETDATE()) - 7, CAST(GETDATE() AS DATE)); "
+				+ "SELECT d.dayName, ISNULL(a.cnt, 0) AS patients "
+				+ "FROM (VALUES (0, N'T2'), (1, N'T3'), (2, N'T4'), (3, N'T5'), (4, N'T6'), (5, N'T7'), (6, N'CN')) "
+				+ "  AS d(dayOffset, dayName) "
+				+ "LEFT JOIN ( "
+				+ "  SELECT DATEDIFF(DAY, @startOfWeek, CAST(APDateTimes AS DATE)) AS dayOffset, COUNT(*) AS cnt "
+				+ "  FROM APPOINTMENT "
+				+ "  WHERE CAST(APDateTimes AS DATE) BETWEEN @startOfWeek AND DATEADD(DAY, 6, @startOfWeek) "
+				+ "    AND APStatus != N'Đã hủy' "
+				+ "  GROUP BY DATEDIFF(DAY, @startOfWeek, CAST(APDateTimes AS DATE)) "
+				+ ") a ON d.dayOffset = a.dayOffset "
+				+ "ORDER BY d.dayOffset";
+
+		try (Connection conn = DatabaseConnection.getConnection();
+			 PreparedStatement ps = conn.prepareStatement(sql)) {
+			ps.setString(1, week);
+			try (ResultSet rs = ps.executeQuery()) {
+				while (rs.next()) {
+					result.add(new DailyVisitCount(rs.getString("dayName"), rs.getInt("patients")));
+				}
+			}
+		} catch (SQLException e) {
+			System.err.println("Lỗi lấy lượt khám tuần: " + e.getMessage());
+		}
+
+		// Fallback nếu query thất bại
+		if (result.isEmpty()) {
+			String[] days = {"T2", "T3", "T4", "T5", "T6", "T7", "CN"};
+			for (String d : days) result.add(new DailyVisitCount(d, 0));
+		}
+
+		return result;
 	}
 
 	// Lấy danh sách phòng khám

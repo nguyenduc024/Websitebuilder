@@ -11,17 +11,18 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import gr7.oop.HealthLink.dao.ClinicManagerDAO;
-import gr7.oop.HealthLink.dao.ClinicManagerDAO.DoctorStats;
-import gr7.oop.HealthLink.dao.ClinicManagerDAO.DoctorInfo;
-import gr7.oop.HealthLink.dao.ClinicManagerDAO.PatientInfo;
-import gr7.oop.HealthLink.dao.ClinicManagerDAO.InvoiceInfo;
-import gr7.oop.HealthLink.dao.ClinicManagerDAO.DashboardStats;
-import gr7.oop.HealthLink.dao.ClinicManagerDAO.ClinicRoomInfo;
-import gr7.oop.HealthLink.dao.ClinicManagerDAO.MedicineInfo;
 import gr7.oop.HealthLink.dao.ClinicManagerDAO.AppointmentInfo;
+import gr7.oop.HealthLink.dao.ClinicManagerDAO.ClinicRoomInfo;
+import gr7.oop.HealthLink.dao.ClinicManagerDAO.DashboardStats;
+import gr7.oop.HealthLink.dao.ClinicManagerDAO.DoctorInfo;
+import gr7.oop.HealthLink.dao.ClinicManagerDAO.DoctorStats;
+import gr7.oop.HealthLink.dao.ClinicManagerDAO.InvoiceInfo;
+import gr7.oop.HealthLink.dao.ClinicManagerDAO.MedicineInfo;
+import gr7.oop.HealthLink.dao.ClinicManagerDAO.PatientInfo;
 import gr7.oop.HealthLink.entity.Appointment;
 import gr7.oop.HealthLink.entity.ClinicRoom;
 import gr7.oop.HealthLink.entity.Department;
@@ -42,6 +43,13 @@ import gr7.oop.HealthLink.exception.DuplicateAppointmentException;
 public class ClinicAPIController {
 
 	private ClinicManagerDAO dao = new ClinicManagerDAO();
+
+	private Map<String, String> response(String status, String message) {
+		java.util.HashMap<String, String> map = new java.util.HashMap<>();
+		map.put("status", status);
+		map.put("message", message);
+		return map;
+	}
 
 	// Cung cấp API đường dẫn: http://localhost:8080/api/top-doctors
 	@GetMapping("/top-doctors")
@@ -68,15 +76,15 @@ public class ClinicAPIController {
 			boolean success = dao.bookAppointment(newAp);
 
 			if (success) {
-				return Map.of("status", "success", "message", "🎉 Đặt lịch thành công!");
+				return response("success", "🎉 Đặt lịch thành công!");
 			} else {
-				return Map.of("status", "error", "message", "Lỗi hệ thống khi lưu xuống Database.");
+				return response("error", "Lỗi hệ thống khi lưu xuống Database.");
 			}
 
 		} catch (DuplicateAppointmentException e) {
-			return Map.of("status", "error", "message", "⚠️ " + e.getMessage());
+			return response("error", "⚠️ " + e.getMessage());
 		} catch (Exception e) {
-			return Map.of("status", "error", "message", "❌ Sai định dạng dữ liệu: " + e.getMessage());
+			return response("error", "❌ " + e.getMessage());
 		}
 	}
 
@@ -93,9 +101,9 @@ public class ClinicAPIController {
 		boolean success = dao.updateAppointmentStatus(apId, "Đã hủy");
 
 		if (success) {
-			return Map.of("status", "success", "message", "Đã hủy lịch hẹn thành công!");
+			return response("success", "Đã hủy lịch hẹn thành công!");
 		} else {
-			return Map.of("status", "error", "message", "Lỗi: Không thể hủy lịch hẹn này.");
+			return response("error", "Lỗi: Không thể hủy lịch hẹn này.");
 		}
 	}
 
@@ -128,12 +136,12 @@ public class ClinicAPIController {
 			boolean success = dao.createMedicalRecordAndPrescription(mr, pr, details);
 
 			if (success) {
-				return Map.of("status", "success", "message", "Đã lưu hồ sơ và kê đơn thành công!");
+				return response("success", "Đã lưu hồ sơ và kê đơn thành công!");
 			} else {
-				return Map.of("status", "error", "message", "Lỗi Transaction khi lưu vào Database.");
+				return response("error", "Lỗi Transaction khi lưu vào Database.");
 			}
 		} catch (Exception e) {
-			return Map.of("status", "error", "message", "Lỗi dữ liệu: " + e.getMessage());
+			return response("error", "Lỗi dữ liệu: " + e.getMessage());
 		}
 	}
 
@@ -155,11 +163,11 @@ public class ClinicAPIController {
 
 			boolean success = dao.generateInvoice(apId, prId, paymentMethod);
 			if (success) {
-				return Map.of("status", "success", "message", "Hóa đơn đã được tạo thành công!");
+				return response("success", "Hóa đơn đã được tạo thành công!");
 			}
-			return Map.of("status", "error", "message", "Lỗi tạo hóa đơn.");
+			return response("error", "Lỗi tạo hóa đơn.");
 		} catch (Exception e) {
-			return Map.of("status", "error", "message", "Dữ liệu hóa đơn không hợp lệ.");
+			return response("error", "Dữ liệu hóa đơn không hợp lệ.");
 		}
 	}
 
@@ -168,9 +176,9 @@ public class ClinicAPIController {
 	public Map<String, String> addWorkSchedule(@RequestBody WorkSchedule ws) {
 		boolean success = dao.setWorkSchedule(ws);
 		if (success) {
-			return Map.of("status", "success", "message", "Đã cập nhật lịch làm việc!");
+			return response("success", "Đã cập nhật lịch làm việc!");
 		}
-		return Map.of("status", "error", "message", "Không thể lưu lịch làm việc.");
+		return response("error", "Không thể lưu lịch làm việc.");
 	}
 
 	// ===== LISTING APIs =====
@@ -198,6 +206,11 @@ public class ClinicAPIController {
 	@GetMapping("/dashboard/stats")
 	public DashboardStats getDashboardStats() {
 		return dao.getDashboardStats();
+	}
+
+	@GetMapping("/dashboard/weekly-visits")
+	public List<ClinicManagerDAO.DailyVisitCount> getWeeklyVisits(@RequestParam(defaultValue = "current") String week) {
+		return dao.getWeeklyVisits(week);
 	}
 
 	@GetMapping("/clinic-rooms")

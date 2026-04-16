@@ -18,29 +18,27 @@ public class DatabaseConnection {
 	private static final String DB_URL = "jdbc:sqlserver://" + SERVER_NAME + ":" + PORT + ";databaseName="
 			+ DATABASE_NAME + ";encrypt=true;trustServerCertificate=true;";
 
-	// tạo biến lưu trữ kết nối
-	private static Connection connection;
-
-	// 2. Hàm lấy kết nối
-	public static Connection getConnection() {
+	// Đăng ký Driver 1 lần duy nhất khi class được load
+	static {
 		try {
-			// Kiểm tra xem kết nối đã được tạo và còn mở không, nếu chưa thì tạo mới
-			if (connection == null || connection.isClosed()) {
-				// Đăng ký Driver với SQL Server
-				Class.forName("com.microsoft.sqlserver.jdbc.SQLServerDriver");
-
-				// Thực hiện kết nối
-				connection = DriverManager.getConnection(DB_URL, USERNAME, PASSWORD);
-				System.out.println("Đã kết nối thành công tới Database: " + DATABASE_NAME);
-			}
+			Class.forName("com.microsoft.sqlserver.jdbc.SQLServerDriver");
 		} catch (ClassNotFoundException e) {
 			System.err.println("❌ Không tìm thấy thư viện JDBC. Hãy kiểm tra lại file pom.xml!");
 			e.printStackTrace();
+		}
+	}
+
+	// 2. Hàm lấy kết nối - tạo connection MỚI mỗi lần gọi
+	// Mỗi request/thread sẽ có connection riêng, tránh race condition
+	public static Connection getConnection() {
+		try {
+			Connection conn = DriverManager.getConnection(DB_URL, USERNAME, PASSWORD);
+			return conn;
 		} catch (SQLException e) {
 			System.err.println("❌ Lỗi kết nối CSDL: " + e.getMessage());
 			e.printStackTrace();
+			return null;
 		}
-		return connection;
 	}
 
 //	3. test

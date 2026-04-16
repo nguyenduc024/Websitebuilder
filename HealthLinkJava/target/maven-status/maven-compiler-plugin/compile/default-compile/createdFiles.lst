@@ -11,6 +11,7 @@ gr7\oop\HealthLink\DatabaseConnection.class
 gr7\oop\HealthLink\dao\ClinicManagerDAO$ClinicRoomInfo.class
 gr7\oop\HealthLink\dao\ClinicManagerDAO.class
 gr7\oop\HealthLink\dao\ClinicManagerDAO$DashboardStats.class
+gr7\oop\HealthLink\dao\ClinicManagerDAO$DailyVisitCount.class
 gr7\oop\HealthLink\dao\ClinicManagerDAO$DoctorStats.class
 gr7\oop\HealthLink\controller\AppointmentRequest.class
 gr7\oop\HealthLink\entity\Appointment.class

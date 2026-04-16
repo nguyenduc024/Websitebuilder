@@ -6,7 +6,10 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "dev:electron": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development npx electron dist-electron/main.cjs\""
+    "dev:backend": "mvn -f HealthLinkJava/pom.xml spring-boot:run",
+    "dev:frontend": "vite",
+    "dev:electron": "concurrently \"npm run dev:frontend\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development npx electron dist-electron/main.cjs\"",
+    "dev:desktop": "concurrently --kill-others-on-fail \"npm run dev:backend\" \"npm run dev:frontend\" \"wait-on tcp:8080 http://localhost:5173 && cross-env NODE_ENV=development npx electron dist-electron/main.cjs\""
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -66,9 +69,11 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
+    "@types/node": "^25.6.0",
     "@vitejs/plugin-react": "4.7.0",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
+    "electron": "^41.2.1",
     "tailwindcss": "4.1.12",
     "typescript": "^6.0.2",
     "vite": "6.3.5",
