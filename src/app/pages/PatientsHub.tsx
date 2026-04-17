@@ -51,6 +51,9 @@ export function PatientsHub() {
   const [doctorOptions, setDoctorOptions] = useState<DoctorOption[]>([]);
   const [roomOptions, setRoomOptions] = useState<RoomOption[]>([]);
   const [apptForm, setApptForm] = useState({ doctorId: 0, clinicRoomId: 0, reason: "", dateTime: "" });
+  const [apptDoctorText, setApptDoctorText] = useState("");
+  const [apptRoomText, setApptRoomText] = useState("");
+  const [apptFocus, setApptFocus] = useState<"doctor" | "room" | null>(null);
   const [apptLoading, setApptLoading] = useState(false);
   const [apptMsg, setApptMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -132,6 +135,9 @@ export function PatientsHub() {
   const openApptModal = async (patient: PatientData) => {
     setApptPatient(patient);
     setApptForm({ doctorId: 0, clinicRoomId: 0, reason: "", dateTime: "" });
+    setApptDoctorText("");
+    setApptRoomText("");
+    setApptFocus(null);
     setApptMsg(null);
     try {
       const [d, r] = await Promise.all([
@@ -495,27 +501,106 @@ export function PatientsHub() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Bác sĩ <span className="text-red-500">*</span></label>
                 <div className="relative">
-                  <Stethoscope className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <select
-                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none appearance-none"
-                    value={apptForm.doctorId}
-                    onChange={(e) => setApptForm((f) => ({ ...f, doctorId: Number(e.target.value) }))}
-                  >
-                    <option value={0}>-- Chọn bác sĩ --</option>
-                    {doctorOptions.map((d) => <option key={d.doctorId} value={d.doctorId}>{d.fullName}</option>)}
-                  </select>
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Nhập tên bác sĩ để gợi ý..."
+                    className="w-full pl-9 pr-8 py-2.5 rounded-lg border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+                    value={apptDoctorText}
+                    onChange={(e) => {
+                      setApptDoctorText(e.target.value);
+                      if (apptForm.doctorId) setApptForm((f) => ({ ...f, doctorId: 0 }));
+                    }}
+                    onFocus={() => setApptFocus("doctor")}
+                    onBlur={() => setTimeout(() => { if (apptFocus === "doctor") setApptFocus(null); }, 150)}
+                  />
+                  {apptForm.doctorId > 0 && (
+                    <button
+                      type="button"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      onClick={() => { setApptDoctorText(""); setApptForm((f) => ({ ...f, doctorId: 0 })); }}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
+                {apptFocus === "doctor" && !apptForm.doctorId && (
+                  <div className="relative">
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-44 overflow-y-auto">
+                      {doctorOptions.filter((d) => d.fullName.toLowerCase().includes(apptDoctorText.toLowerCase())).length === 0 ? (
+                        <div className="px-3 py-2.5 text-sm text-slate-400">Không tìm thấy bác sĩ</div>
+                      ) : doctorOptions
+                          .filter((d) => d.fullName.toLowerCase().includes(apptDoctorText.toLowerCase()))
+                          .map((d) => (
+                            <button
+                              key={d.doctorId}
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setApptForm((f) => ({ ...f, doctorId: d.doctorId }));
+                                setApptDoctorText(d.fullName);
+                                setApptFocus(null);
+                              }}
+                            >
+                              {d.fullName}
+                            </button>
+                          ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Phòng khám <span className="text-red-500">*</span></label>
-                <select
-                  className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                  value={apptForm.clinicRoomId}
-                  onChange={(e) => setApptForm((f) => ({ ...f, clinicRoomId: Number(e.target.value) }))}
-                >
-                  <option value={0}>-- Chọn phòng khám --</option>
-                  {roomOptions.map((r) => <option key={r.roomId} value={r.roomId}>{r.roomName} ({r.roomNumber})</option>)}
-                </select>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Nhập tên hoặc mã phòng để gợi ý..."
+                    className="w-full pl-9 pr-8 py-2.5 rounded-lg border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+                    value={apptRoomText}
+                    onChange={(e) => {
+                      setApptRoomText(e.target.value);
+                      if (apptForm.clinicRoomId) setApptForm((f) => ({ ...f, clinicRoomId: 0 }));
+                    }}
+                    onFocus={() => setApptFocus("room")}
+                    onBlur={() => setTimeout(() => { if (apptFocus === "room") setApptFocus(null); }, 150)}
+                  />
+                  {apptForm.clinicRoomId > 0 && (
+                    <button
+                      type="button"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      onClick={() => { setApptRoomText(""); setApptForm((f) => ({ ...f, clinicRoomId: 0 })); }}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+                {apptFocus === "room" && !apptForm.clinicRoomId && (
+                  <div className="relative">
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-44 overflow-y-auto">
+                      {roomOptions.filter((r) => `${r.roomName} ${r.roomNumber}`.toLowerCase().includes(apptRoomText.toLowerCase())).length === 0 ? (
+                        <div className="px-3 py-2.5 text-sm text-slate-400">Không tìm thấy phòng khám</div>
+                      ) : roomOptions
+                          .filter((r) => `${r.roomName} ${r.roomNumber}`.toLowerCase().includes(apptRoomText.toLowerCase()))
+                          .map((r) => (
+                            <button
+                              key={r.roomId}
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setApptForm((f) => ({ ...f, clinicRoomId: r.roomId }));
+                                setApptRoomText(`${r.roomName} - ${r.roomNumber}`);
+                                setApptFocus(null);
+                              }}
+                            >
+                              {r.roomName} ({r.roomNumber})
+                            </button>
+                          ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Ngày giờ khám <span className="text-red-500">*</span></label>
