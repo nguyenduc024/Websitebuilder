@@ -263,10 +263,10 @@ cd Websitebuilder
 ### Bước 2: Cài đặt dependencies (Frontend + Electron)
 
 ```bash
-pnpm install
+npm install
 ```
 
-> Lệnh này sẽ cài tất cả packages trong `package.json` bao gồm React, Vite, Electron, TailwindCSS, shadcn/ui, v.v.
+> Lệnh này sẽ cài tất cả packages trong `package.json` bao gồm React, Vite, Electron, TailwindCSS, v.v.
 
 ### Bước 3: Build backend (lần đầu)
 
@@ -287,42 +287,46 @@ Bạn có nhiều cách chạy tùy nhu cầu:
 ### 🖥 Chạy toàn bộ ứng dụng Desktop (Electron + Backend + Frontend)
 
 ```bash
-pnpm run dev:desktop
+npm run dev:desktop
 ```
 
 > Lệnh này sẽ **tự động**:
-> 1. Khởi động Spring Boot backend (port `8080`)
-> 2. Khởi động Vite dev server (port `5173`)
-> 3. Chờ cả hai service sẵn sàng
-> 4. Mở cửa sổ Electron hiển thị ứng dụng
+> 1. Build lại Electron main process
+> 2. Mở Electron ở chế độ development
+> 3. Electron tự kiểm tra backend (`8080`) và frontend (`5173`)
+> 4. Nếu service nào chưa chạy thì Electron mới tự khởi động service đó
+>
+> Nếu backend đã chạy sẵn trên port `8080`, lệnh này sẽ **tái sử dụng** backend hiện có thay vì khởi động thêm một tiến trình mới.
 
 ### 🌐 Chỉ chạy Frontend (trên trình duyệt)
 
 ```bash
-pnpm run dev:frontend
+npm run dev:frontend
 # hoặc
-pnpm run dev
+npm run dev
 ```
 Mở trình duyệt: [http://localhost:5173](http://localhost:5173)
 
 ### ☕ Chỉ chạy Backend
 
 ```bash
-pnpm run dev:backend
+npm run dev:backend
 # hoặc
 cd HealthLinkJava && mvn spring-boot:run
 ```
 
-### ⚡ Chỉ chạy Electron (khi đã có backend + frontend chạy sẵn)
+### ⚡ Chỉ chạy Electron shell kèm frontend dev server
 
 ```bash
-pnpm run dev:electron
+npm run dev:electron
 ```
+
+> Lệnh này sẽ chạy Vite dev server và mở Electron. Backend vẫn được Electron tự kiểm tra, và nếu chưa chạy thì Electron sẽ tự khởi động backend.
 
 ### 📦 Build production
 
 ```bash
-pnpm run build
+npm run build
 ```
 
 ---
@@ -398,7 +402,6 @@ Websitebuilder/
 ├── pnpm-workspace.yaml     # pnpm workspace config
 ├── vite.config.ts          # Vite configuration
 ├── postcss.config.mjs      # PostCSS configuration
-└── default_shadcn_theme.css# shadcn/ui theme
 ```
 
 ---
