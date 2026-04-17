@@ -49,8 +49,8 @@ export function Login() {
 
             <div className="mt-8 rounded-xl border border-white/20 bg-white/10 p-4 text-sm space-y-1">
               <p className="font-semibold">Tài khoản quản trị</p>
-              <p className="text-emerald-100">Username: nhom8</p>
-              <p className="text-emerald-100">Nhóm 8 — ITS326_252_1_D01</p>
+              <p className="text-emerald-100">Username: nhom7</p>
+              <p className="text-emerald-100">Nhóm 7 — ITS326_252_1_D01</p>
             </div>
           </div>
 

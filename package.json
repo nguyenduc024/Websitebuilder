@@ -5,6 +5,8 @@
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
+    "kill:healthlink": "powershell -NoProfile -Command \"$ErrorActionPreference='SilentlyContinue'; Get-Process | Where-Object { $_.ProcessName -like 'HealthLink*' -or $_.ProcessName -like '*Setup*' } | Stop-Process -Force\"",
+    "clean:release": "powershell -NoProfile -Command \"$p='release'; if (Test-Path $p) { try { Remove-Item $p -Recurse -Force -ErrorAction Stop } catch { Write-Host 'release folder is locked, skip cleanup and continue packaging.' } }\"",
     "build:web": "vite build",
     "build:electron": "tsc -p src/electron/tsconfig.json && node -e \"const fs=require('fs');fs.mkdirSync('dist-electron/assets',{recursive:true});fs.copyFileSync('dist-electron/main.js','dist-electron/main.cjs');fs.copyFileSync('src/assets/icons/win/icon.ico','dist-electron/assets/icon.ico');\"",
     "build:jar": "mvn -f HealthLinkJava/pom.xml package -DskipTests",
@@ -14,7 +16,8 @@
     "dev:frontend": "vite",
     "dev:electron": "npm run build:electron && concurrently \"npm run dev:frontend\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development npx electron dist-electron/main.cjs\"",
     "dev:desktop": "npm run build:electron && cross-env NODE_ENV=development npx electron dist-electron/main.cjs",
-    "package:win": "npm run build && npm run build:jar && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win nsis portable --x64"
+    "package:win": "npm run kill:healthlink && npm run clean:release && npm run build && npm run build:jar && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win nsis portable --x64",
+    "package:win:fresh": "npm run kill:healthlink && npm run build && npm run build:jar && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false powershell -NoProfile -Command \"$out='release/build-'+(Get-Date -Format yyyyMMdd-HHmmss); npx electron-builder --config.directories.output=$out --win nsis portable --x64\""
   },
   "build": {
     "appId": "com.healthlink.clinic",
