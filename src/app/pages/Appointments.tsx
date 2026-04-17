@@ -9,13 +9,14 @@ import {
   CheckCircle2, 
   XCircle, 
   RefreshCw,
-  Settings,
   Search,
   X,
   Loader2,
   BarChart3,
   Trophy,
-  Medal
+  Medal,
+  User,
+  DoorOpen
 } from "lucide-react";
 import { fetchApi, API_BASE, registerRefreshOnFocus } from "../lib/api";
 
@@ -57,6 +58,154 @@ interface RoomOption {
   roomNumber: string;
 }
 
+interface WorkScheduleItem {
+  wsId: number;
+  drId: number;
+  doctorName: string;
+  crId: number;
+  clinicRoomName: string;
+  wsDay: string;
+  wsStartTime: string;
+  wsEndTime: string;
+  wsMaxPatientSlot: number;
+}
+
+const VI_WEEKDAYS = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
+
+function formatWsDay(dateStr: string): string {
+  // dateStr can be "2026-04-17" or "Monday" etc.
+  // Try to parse as ISO date first
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) {
+    const dow = VI_WEEKDAYS[d.getDay()];
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    return `${dow}, ${day}/${month}/${d.getFullYear()}`;
+  }
+  // Fallback: map English day names
+  const MAP: Record<string, string> = {
+    Monday: "Thứ Hai", Tuesday: "Thứ Ba", Wednesday: "Thứ Tư",
+    Thursday: "Thứ Năm", Friday: "Thứ Sáu", Saturday: "Thứ Bảy", Sunday: "Chủ Nhật",
+  };
+  return MAP[dateStr] ?? dateStr;
+}
+
+function WorkScheduleModal({
+  workSchedules, wsLoading, wsSearchDoctor, setWsSearchDoctor, onClose,
+}: {
+  workSchedules: WorkScheduleItem[];
+  wsLoading: boolean;
+  wsSearchDoctor: string;
+  setWsSearchDoctor: (v: string) => void;
+  onClose: () => void;
+}) {
+  const filtered = wsSearchDoctor.trim()
+    ? workSchedules.filter(s => s.doctorName.toLowerCase().includes(wsSearchDoctor.toLowerCase()))
+    : workSchedules;
+
+  const byDoctor: Record<string, WorkScheduleItem[]> = {};
+  filtered.forEach(s => {
+    if (!byDoctor[s.doctorName]) byDoctor[s.doctorName] = [];
+    byDoctor[s.doctorName].push(s);
+  });
+  const doctorNames = Object.keys(byDoctor).sort();
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden mx-4 animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-violet-50 to-blue-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center">
+              <Clock className="w-5 h-5 text-violet-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Giờ làm việc bác sĩ</h2>
+              <p className="text-xs text-slate-500">Lịch làm việc theo từng bác sĩ</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-white/80 rounded-lg transition-colors">
+            <X className="w-5 h-5 text-slate-400" />
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="px-6 pt-4 pb-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              value={wsSearchDoctor}
+              onChange={e => setWsSearchDoctor(e.target.value)}
+              placeholder="Tìm theo tên bác sĩ..."
+              className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-300"
+            />
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 pb-6 overflow-y-auto max-h-[calc(90vh-160px)]">
+          {wsLoading ? (
+            <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Đang tải lịch làm việc...
+            </div>
+          ) : doctorNames.length === 0 ? (
+            <div className="text-center py-16 text-sm text-slate-400">Không tìm thấy dữ liệu.</div>
+          ) : (
+            <div className="space-y-5 mt-3">
+              {doctorNames.map(drName => {
+                const slots = byDoctor[drName];
+                // Group by wsDay (actual date string from API)
+                const slotsByDay: Record<string, WorkScheduleItem[]> = {};
+                slots.forEach(s => {
+                  if (!slotsByDay[s.wsDay]) slotsByDay[s.wsDay] = [];
+                  slotsByDay[s.wsDay].push(s);
+                });
+                // Sort days chronologically
+                const sortedDays = Object.keys(slotsByDay).sort();
+                return (
+                  <div key={drName} className="rounded-xl border border-slate-200 overflow-hidden">
+                    <div className="flex items-center gap-2.5 px-4 py-3 bg-slate-50 border-b border-slate-200">
+                      <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+                        <User className="w-4 h-4 text-violet-600" />
+                      </div>
+                      <span className="text-sm font-semibold text-slate-800">{drName}</span>
+                      <span className="ml-auto text-xs text-slate-400">{slots.length} ca</span>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {sortedDays.map(day => (
+                        <div key={day} className="flex items-start gap-3 px-4 py-3">
+                          <span className="text-xs font-semibold text-violet-700 bg-violet-50 border border-violet-100 rounded-md px-2 py-1.5 min-w-[110px] text-center shrink-0 mt-0.5 leading-tight">
+                            {formatWsDay(day)}
+                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            {slotsByDay[day].map(s => (
+                              <div key={s.wsId} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs shadow-sm">
+                                <Clock className="w-3 h-3 text-emerald-500 shrink-0" />
+                                <span className="font-medium text-slate-700">{s.wsStartTime.slice(0,5)} – {s.wsEndTime.slice(0,5)}</span>
+                                <span className="text-slate-300">|</span>
+                                <DoorOpen className="w-3 h-3 text-blue-400 shrink-0" />
+                                <span className="text-slate-500">{s.clinicRoomName}</span>
+                                <span className="text-slate-300">|</span>
+                                <span className="text-slate-400">{s.wsMaxPatientSlot} bệnh nhân</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Appointments() {
   const [appointments, setAppointments] = useState<AppointmentData[]>([]);
   const [allDoctorNames, setAllDoctorNames] = useState<string[]>([]);
@@ -70,6 +219,12 @@ export function Appointments() {
   const [showDoctorRanking, setShowDoctorRanking] = useState(false);
   const [doctorRanking, setDoctorRanking] = useState<DoctorRankingItem[]>([]);
   const [rankingLoading, setRankingLoading] = useState(false);
+
+  // Work schedule state
+  const [showWorkSchedule, setShowWorkSchedule] = useState(false);
+  const [workSchedules, setWorkSchedules] = useState<WorkScheduleItem[]>([]);
+  const [wsLoading, setWsLoading] = useState(false);
+  const [wsSearchDoctor, setWsSearchDoctor] = useState("");
 
   // Calendar state
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
@@ -174,6 +329,18 @@ export function Appointments() {
     const unregister = registerRefreshOnFocus(() => void loadData());
     return () => { isActive = false; unregister(); };
   }, []);
+
+  const loadWorkSchedules = async () => {
+    setWsLoading(true);
+    try {
+      const data = await fetchApi<WorkScheduleItem[]>("/work-schedules");
+      setWorkSchedules(data);
+    } catch {
+      showToast("error", "Không thể tải lịch làm việc.");
+    } finally {
+      setWsLoading(false);
+    }
+  };
 
   // Gọi API backend để lấy xếp hạng (đã sort bằng Heap Sort ở Java)
   const loadDoctorRanking = async () => {
@@ -394,8 +561,11 @@ export function Appointments() {
             <BarChart3 className="w-4 h-4" />
             Xếp hạng BS
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
-            <Settings className="w-4 h-4" />
+          <button
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+            onClick={() => { setShowWorkSchedule(true); void loadWorkSchedules(); }}
+          >
+            <Clock className="w-4 h-4" />
             Giờ làm việc
           </button>
           <button
@@ -753,6 +923,15 @@ export function Appointments() {
           </div>
         </div>
       )}
+
+      {/* ====== WORK SCHEDULE MODAL ====== */}
+      {showWorkSchedule && <WorkScheduleModal
+        workSchedules={workSchedules}
+        wsLoading={wsLoading}
+        wsSearchDoctor={wsSearchDoctor}
+        setWsSearchDoctor={setWsSearchDoctor}
+        onClose={() => setShowWorkSchedule(false)}
+      />}
 
       {/* ====== DOCTOR RANKING MODAL (Heap Sort) ====== */}
       {showDoctorRanking && (

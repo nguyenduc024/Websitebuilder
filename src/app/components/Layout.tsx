@@ -183,7 +183,7 @@ export function AppLayout() {
           <div className="text-xs text-slate-600 space-y-2">
             <p className="flex justify-between">
               <span className="text-slate-400">Tên nhóm:</span>
-              <span>8</span>
+              <span>7</span>
             </p>
             <p className="flex justify-between">
               <span className="text-slate-400">Lớp:</span>
@@ -191,7 +191,7 @@ export function AppLayout() {
             </p>
             <p className="flex justify-between">
               <span className="text-slate-400">Giảng viên:</span>
-              <span>Thầy Bùi Hữu Đồng</span>
+              <span>Ths. Bùi Hữu Đông</span>
             </p>
           </div>
         </div>

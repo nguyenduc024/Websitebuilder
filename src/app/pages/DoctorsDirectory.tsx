@@ -54,6 +54,8 @@ const EMPTY_FORM = {
 export function DoctorsDirectory() {
   const [activeTab, setActiveTab] = useState<"doctors" | "schedule">("doctors");
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedDepartment, setSelectedDepartment] = useState("all");
+  const [selectedSex, setSelectedSex] = useState("all");
   const [doctors, setDoctors] = useState<DoctorData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -250,10 +252,22 @@ export function DoctorsDirectory() {
     }
   };
 
-  const filteredDoctors = doctors.filter(doc => 
-    doc.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (doc.specialty && doc.specialty.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const departmentOptions = Array.from(
+    new Set(doctors.map((doc) => doc.departmentName).filter((departmentName): departmentName is string => Boolean(departmentName)))
+  ).sort((a, b) => a.localeCompare(b, "vi"));
+
+  const filteredDoctors = doctors.filter((doc) => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const matchesSearch =
+      normalizedSearch.length === 0 ||
+      doc.fullName.toLowerCase().includes(normalizedSearch) ||
+      (doc.specialty && doc.specialty.toLowerCase().includes(normalizedSearch));
+
+    const matchesDepartment = selectedDepartment === "all" || doc.departmentName === selectedDepartment;
+    const matchesSex = selectedSex === "all" || doc.sex === selectedSex;
+
+    return matchesSearch && matchesDepartment && matchesSex;
+  });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -316,21 +330,53 @@ export function DoctorsDirectory() {
       {/* Doctors Tab */}
       {activeTab === "doctors" && (
       <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-slate-100 overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-4 justify-between">
+        <div className="p-4 border-b border-slate-100 flex flex-col gap-4">
           <div className="relative w-full sm:w-96">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Search doctors by name or specialty..." 
+              placeholder="Tìm bác sĩ theo tên hoặc chuyên khoa..." 
               className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <button className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
-            <Filter className="w-4 h-4" />
-            Filter
-          </button>
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <Filter className="w-4 h-4" />
+              Bộ lọc
+            </div>
+            <select
+              className="w-full lg:w-64 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+              value={selectedDepartment}
+              onChange={(e) => setSelectedDepartment(e.target.value)}
+            >
+              <option value="all">Tất cả khoa</option>
+              {departmentOptions.map((departmentName) => (
+                <option key={departmentName} value={departmentName}>
+                  {departmentName}
+                </option>
+              ))}
+            </select>
+            <select
+              className="w-full lg:w-48 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+              value={selectedSex}
+              onChange={(e) => setSelectedSex(e.target.value)}
+            >
+              <option value="all">Tất cả giới tính</option>
+              <option value="Nam">Nam</option>
+              <option value="Nữ">Nữ</option>
+            </select>
+            <button
+              onClick={() => {
+                setSelectedDepartment("all");
+                setSelectedSex("all");
+              }}
+              className="w-full lg:w-auto px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+            >
+              Xóa lọc
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -396,8 +442,8 @@ export function DoctorsDirectory() {
               <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Search className="w-8 h-8 text-slate-400" />
               </div>
-              <h3 className="text-sm font-medium text-slate-900">No doctors found</h3>
-              <p className="text-sm text-slate-500 mt-1">Try adjusting your search query.</p>
+              <h3 className="text-sm font-medium text-slate-900">Không tìm thấy bác sĩ phù hợp</h3>
+              <p className="text-sm text-slate-500 mt-1">Hãy thử thay đổi từ khóa hoặc bộ lọc.</p>
             </div>
           )}
         </div>
@@ -405,10 +451,10 @@ export function DoctorsDirectory() {
         <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-sm text-slate-500">
           <div>Hiển thị 1 đến {filteredDoctors.length} trong {doctors.length} bác sĩ</div>
           <div className="flex gap-1">
-            <button className="px-3 py-1 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50">Prev</button>
+            <button className="px-3 py-1 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50">Trước</button>
             <button className="px-3 py-1 bg-emerald-600 text-white rounded-md">1</button>
             <button className="px-3 py-1 bg-white border border-slate-200 rounded-md hover:bg-slate-50">2</button>
-            <button className="px-3 py-1 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50">Next</button>
+            <button className="px-3 py-1 bg-white border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50">Sau</button>
           </div>
         </div>
       </div>
