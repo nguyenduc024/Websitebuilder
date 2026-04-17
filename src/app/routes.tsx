@@ -1,4 +1,4 @@
-import { Navigate, createBrowserRouter } from "react-router";
+import { Navigate, createHashRouter as createBrowserRouter } from "react-router";
 import { AppLayout } from "./components/Layout";
 import { Dashboard } from "./pages/Dashboard";
 import { DoctorsDirectory } from "./pages/DoctorsDirectory";

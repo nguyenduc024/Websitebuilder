@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { fetchApi } from "../lib/api";
 
+const logoHub = new URL("../../assets/logoHUB.png", import.meta.url).href;
+
 interface SystemNotification {
   id: number;
   title: string;
@@ -146,8 +148,8 @@ export function AppLayout() {
       >
         <div className="flex h-16 items-center px-6 border-b border-slate-100">
           <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-600 text-white font-bold text-xl">
-              +
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg overflow-hidden">
+              <img src={logoHub} alt="Logo HUB" className="h-full w-full object-contain" />
             </div>
             <span className="text-xl font-bold tracking-tight text-slate-800">HealthLink</span>
           </div>
