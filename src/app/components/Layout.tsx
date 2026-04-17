@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Outlet, NavLink } from "react-router";
 import { 
   LayoutDashboard, 
@@ -9,20 +9,132 @@ import {
   Receipt,
   Menu,
   Bell,
-  Search
+  X
 } from "lucide-react";
+import { fetchApi } from "../lib/api";
+
+interface SystemNotification {
+  id: number;
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+}
+
+interface DashboardStats {
+  totalPatients: number;
+  totalDoctors: number;
+  totalAppointments: number;
+  totalRevenue: number;
+}
+
+interface AppointmentInfo {
+  appointmentId: number;
+  patientName: string;
+  doctorName: string;
+  dateTime: string;
+  status: string;
+}
 
 const NAV_ITEMS = [
-  { name: "Dashboard", path: "/", icon: LayoutDashboard },
-  { name: "Doctors Directory", path: "/doctors", icon: Stethoscope },
-  { name: "Patients Hub", path: "/patients", icon: Users },
-  { name: "Appointments", path: "/appointments", icon: CalendarDays },
-  { name: "Doctor Workspace", path: "/workspace", icon: UserRoundPlus },
-  { name: "Billing & Invoicing", path: "/billing", icon: Receipt },
+  { name: "Tổng quan", path: "/", icon: LayoutDashboard },
+  { name: "Quản lý bác sĩ", path: "/doctors", icon: Stethoscope },
+  { name: "Hồ sơ bệnh nhân", path: "/patients", icon: Users },
+  { name: "Lịch hẹn", path: "/appointments", icon: CalendarDays },
+  { name: "Phòng khám", path: "/workspace", icon: UserRoundPlus },
+  { name: "Hóa đơn & Thanh toán", path: "/billing", icon: Receipt },
 ];
 
 export function AppLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [notifications, setNotifications] = useState<SystemNotification[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const bellRef = useRef<HTMLDivElement>(null);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Load thông báo từ hệ thống
+  useEffect(() => {
+    const loadNotifications = async () => {
+      try {
+        const [stats, appointments] = await Promise.all([
+          fetchApi<DashboardStats>("/dashboard/stats"),
+          fetchApi<AppointmentInfo[]>("/appointments"),
+        ]);
+
+        const notifs: SystemNotification[] = [];
+        let id = 1;
+
+        // Thông báo lịch hẹn chờ xác nhận
+        const pending = appointments.filter(a => a.status === "Chờ xác nhận");
+        if (pending.length > 0) {
+          notifs.push({
+            id: id++,
+            title: "Lịch hẹn chờ xác nhận",
+            message: `Có ${pending.length} lịch hẹn đang chờ xác nhận.`,
+            time: "Vừa xong",
+            read: false,
+          });
+        }
+
+        // Thông báo lịch hẹn hôm nay
+        const today = new Date().toISOString().slice(0, 10);
+        const todayAps = appointments.filter(a => a.dateTime.startsWith(today) && a.status !== "Đã hủy");
+        if (todayAps.length > 0) {
+          notifs.push({
+            id: id++,
+            title: "Lịch hẹn hôm nay",
+            message: `Hôm nay có ${todayAps.length} lịch hẹn.`,
+            time: "Hôm nay",
+            read: false,
+          });
+        }
+
+        // Thông báo tổng quan hệ thống
+        notifs.push({
+          id: id++,
+          title: "Tổng quan hệ thống",
+          message: `Hiện có ${stats.totalDoctors} bác sĩ và ${stats.totalPatients} bệnh nhân.`,
+          time: "Hệ thống",
+          read: true,
+        });
+
+        setNotifications(notifs);
+      } catch {
+        // Không có kết nối backend
+        setNotifications([{
+          id: 1,
+          title: "Mất kết nối",
+          message: "Không thể kết nối đến máy chủ. Vui lòng kiểm tra backend.",
+          time: "Vừa xong",
+          read: false,
+        }]);
+      }
+    };
+
+    void loadNotifications();
+    const interval = setInterval(() => void loadNotifications(), 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Đóng dropdown khi click bên ngoài
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const markAllRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  const removeNotification = (id: number) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
 
   return (
     <div className="flex h-screen w-full bg-slate-50 font-sans text-slate-900">
@@ -64,7 +176,7 @@ export function AppLayout() {
         {/* Contact Footer Information */}
         <div className="p-4 border-t border-slate-100 bg-slate-50/50">
           <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-            Support Contact
+            Liên hệ hỗ trợ
           </h4>
           <div className="text-xs text-slate-600 space-y-2">
             <p className="flex justify-between">
@@ -97,18 +209,54 @@ export function AppLayout() {
           </button>
           
           <div className="flex-1 flex justify-end items-center gap-4">
-            <div className="relative hidden md:block w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input 
-                type="text" 
-                placeholder="Search globally..." 
-                className="w-full pl-9 pr-4 py-2 bg-slate-50 border-none rounded-full text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-              />
+            {/* Notification Bell */}
+            <div className="relative" ref={bellRef}>
+              <button 
+                className="relative p-2 text-slate-400 hover:text-slate-600 transition-colors"
+                onClick={() => setShowNotifications(!showNotifications)}
+              >
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full border-2 border-white px-1">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Dropdown */}
+              {showNotifications && (
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-lg border border-slate-200 z-50 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                    <h3 className="text-sm font-semibold text-slate-900">Thông báo</h3>
+                    {unreadCount > 0 && (
+                      <button onClick={markAllRead} className="text-xs text-emerald-600 hover:text-emerald-700 font-medium">
+                        Đánh dấu đã đọc
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-6 text-center text-sm text-slate-400">Không có thông báo</div>
+                    ) : (
+                      notifications.map(n => (
+                        <div key={n.id} className={`flex gap-3 px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors ${!n.read ? "bg-emerald-50/40" : ""}`}>
+                          <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${!n.read ? "bg-emerald-500" : "bg-transparent"}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-900">{n.title}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{n.message}</p>
+                            <p className="text-[10px] text-slate-400 mt-1">{n.time}</p>
+                          </div>
+                          <button onClick={() => removeNotification(n.id)} className="p-0.5 text-slate-300 hover:text-slate-500 flex-shrink-0">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-            <button className="relative p-2 text-slate-400 hover:text-slate-600 transition-colors">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-            </button>
+
             <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-semibold text-sm border border-emerald-200 cursor-pointer">
               Dr
             </div>
