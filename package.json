@@ -3,15 +3,48 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "main": "dist-electron/main.cjs",
   "scripts": {
     "build:web": "vite build",
     "build:electron": "tsc -p src/electron/tsconfig.json && node -e \"const fs=require('fs');fs.mkdirSync('dist-electron/assets',{recursive:true});fs.copyFileSync('dist-electron/main.js','dist-electron/main.cjs');fs.copyFileSync('src/assets/icons/win/icon.ico','dist-electron/assets/icon.ico');\"",
+    "build:jar": "mvn -f HealthLinkJava/pom.xml package -DskipTests",
     "build": "npm run build:web && npm run build:electron",
     "dev": "vite",
     "dev:backend": "mvn -f HealthLinkJava/pom.xml spring-boot:run",
     "dev:frontend": "vite",
     "dev:electron": "npm run build:electron && concurrently \"npm run dev:frontend\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development npx electron dist-electron/main.cjs\"",
-    "dev:desktop": "npm run build:electron && cross-env NODE_ENV=development npx electron dist-electron/main.cjs"
+    "dev:desktop": "npm run build:electron && cross-env NODE_ENV=development npx electron dist-electron/main.cjs",
+    "package:win": "npm run build && npm run build:jar && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win nsis portable --x64"
+  },
+  "build": {
+    "appId": "com.healthlink.clinic",
+    "productName": "HealthLink",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist-electron/**",
+      "dist/**"
+    ],
+    "extraResources": [
+      {
+        "from": "HealthLinkJava/target/HealthLink-0.0.1-SNAPSHOT.jar",
+        "to": "healthlink.jar"
+      }
+    ],
+    "win": {
+      "icon": "src/assets/icons/win/icon.ico",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "src/assets/icons/win/icon.ico",
+      "shortcutName": "HealthLink"
+    }
   },
   "dependencies": {
     "lucide-react": "0.487.0",
@@ -28,6 +61,7 @@
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "electron": "^41.2.1",
+    "electron-builder": "^26.8.1",
     "tailwindcss": "4.1.12",
     "typescript": "^6.0.2",
     "vite": "6.3.5",

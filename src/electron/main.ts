@@ -25,6 +25,7 @@ refreshPath();
 
 const BACKEND_URL = 'http://localhost:8080';
 const FRONTEND_URL = 'http://localhost:5173';
+const IS_DEV = process.env.NODE_ENV === 'development';
 
 let backendProcess: ChildProcess | null = null;
 let frontendProcess: ChildProcess | null = null;
@@ -72,12 +73,21 @@ function waitForService(url: string, timeoutMs: number): Promise<void> {
 
 // ===== Khởi động Backend Java =====
 function startBackend(): ChildProcess {
-    const projectRoot = path.resolve(__dirname, '..');
-    const child = spawn('mvn', ['-f', 'HealthLinkJava/pom.xml', 'spring-boot:run'], {
-        cwd: projectRoot,
-        stdio: 'pipe',
-        shell: true,
-    });
+    let child: ChildProcess;
+    if (IS_DEV) {
+        const projectRoot = path.resolve(__dirname, '..');
+        child = spawn('mvn', ['-f', 'HealthLinkJava/pom.xml', 'spring-boot:run'], {
+            cwd: projectRoot,
+            stdio: 'pipe',
+            shell: true,
+        });
+    } else {
+        const jarPath = path.join(process.resourcesPath, 'healthlink.jar');
+        child = spawn('java', ['-jar', jarPath], {
+            stdio: 'pipe',
+            shell: true,
+        });
+    }
     child.stdout?.on('data', (d: Buffer) => console.log(`[Backend] ${d.toString().trim()}`));
     child.stderr?.on('data', (d: Buffer) => console.error(`[Backend] ${d.toString().trim()}`));
     child.on('error', (err: Error) => console.error('[Backend] Loi khoi dong:', err.message));
@@ -166,29 +176,37 @@ app.on("ready", async () => {
             console.log('[Startup] Backend da chay san.');
         }
 
-        // 2. Kiểm tra & khởi động Frontend
-        const frontendAlive = await isServiceRunning(FRONTEND_URL);
-        if (!frontendAlive) {
-            console.log('[Startup] Frontend chua chay -> Dang khoi dong...');
-            frontendProcess = startFrontend();
-        } else {
-            console.log('[Startup] Frontend da chay san.');
+        // 2. Kiểm tra & khởi động Frontend (chỉ cần trong dev)
+        if (IS_DEV) {
+            const frontendAlive = await isServiceRunning(FRONTEND_URL);
+            if (!frontendAlive) {
+                console.log('[Startup] Frontend chua chay -> Dang khoi dong...');
+                frontendProcess = startFrontend();
+            } else {
+                console.log('[Startup] Frontend da chay san.');
+            }
         }
 
-        // 3. Chờ cả 2 sẵn sàng (Backend 2 phút, Frontend 1 phút)
-        console.log('[Startup] Dang cho Backend & Frontend san sang...');
-        await Promise.all([
-            waitForService(BACKEND_URL, 120000),
-            waitForService(FRONTEND_URL, 60000),
-        ]);
+        // 3. Chờ service sẵn sàng
+        if (IS_DEV) {
+            console.log('[Startup] Dang cho Backend & Frontend san sang...');
+            await Promise.all([
+                waitForService(BACKEND_URL, 120000),
+                waitForService(FRONTEND_URL, 60000),
+            ]);
+        } else {
+            console.log('[Startup] Dang cho Backend san sang...');
+            await waitForService(BACKEND_URL, 120000);
+        }
 
         console.log('[Startup] Tat ca service da san sang!');
 
         // 4. Load giao diện chính
-        mainWindow.loadURL(FRONTEND_URL);
-
-        if (process.env.NODE_ENV === 'development') {
+        if (IS_DEV) {
+            mainWindow.loadURL(FRONTEND_URL);
             mainWindow.webContents.openDevTools();
+        } else {
+            mainWindow.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
         }
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
