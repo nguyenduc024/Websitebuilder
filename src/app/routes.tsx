@@ -13,7 +13,6 @@ function ProtectedLayout() {
   if (!isAuthenticated()) {
     return <Navigate to="/login" replace />;
   }
-
   return <AppLayout />;
 }
 
