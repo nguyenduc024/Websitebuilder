@@ -88,7 +88,7 @@ public class ClinicManagerDAO {
 	}
 
 	// 2.3 Lấy trạng thái lịch hẹn
-	public String getAppointmentStatus(int apId) {
+	public String Status(int apId) {
 		String sql = "SELECT APStatus FROM APPOINTMENT WHERE APId = ?";
 		try (Connection conn = DatabaseConnection.getConnection();
 			 PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -119,7 +119,7 @@ public class ClinicManagerDAO {
 			PreparedStatement psMR = conn.prepareStatement(sqlMR, Statement.RETURN_GENERATED_KEYS);
 			psMR.setInt(1, mr.getDoctor().getId());
 			psMR.setInt(2, mr.getPatient().getId());
-			psMR.setInt(3, mr.getappointment());
+			psMR.setInt(3, mr.getappointmentId());
 			psMR.setString(4, mr.getDiagnosis());
 			psMR.setString(5, mr.getMethod());
 			psMR.setString(6, mr.getTestResult());
@@ -155,7 +155,7 @@ public class ClinicManagerDAO {
 			// Bảng 4: Tự động tạo hóa đơn (INVOICE)
 			String sqlInv = "INSERT INTO INVOICE (APId, PRId, INTotalPrice, INPaymentMethod, INStatus) VALUES (?, ?, ?, NULL, N'Chưa thanh toán')";
 			PreparedStatement psInv = conn.prepareStatement(sqlInv, Statement.RETURN_GENERATED_KEYS);
-			psInv.setInt(1, mr.getappointment());
+			psInv.setInt(1, mr.getappointmentId());
 			psInv.setInt(2, prId);
 			psInv.setDouble(3, totalPrice);
 			psInv.executeUpdate();
@@ -172,7 +172,7 @@ public class ClinicManagerDAO {
 			// Đổi trạng thái lịch hẹn thành 'Hoàn thành'
 			String updateApSql = "UPDATE APPOINTMENT SET APStatus = N'Hoàn thành', APUpdateAt = GETDATE() WHERE APId = ?";
 			PreparedStatement psUpdateAp = conn.prepareStatement(updateApSql);
-			psUpdateAp.setInt(1, mr.getappointment());
+			psUpdateAp.setInt(1, mr.getappointmentId());
 			psUpdateAp.executeUpdate();
 
 			conn.commit(); // Tất cả đều ổn -> Lưu xuống Database
@@ -325,7 +325,7 @@ public class ClinicManagerDAO {
 		return list;
 	}
 
-	public List<AppointmentInfo> getAppointmentsByDoctor(int doctorId) {
+	public List<AppointmentInfo> sByDoctor(int doctorId) {
 		List<AppointmentInfo> list = new ArrayList<>();
 		String sql = "SELECT a.APId, a.PId, a.DrId, p.PLastName + ' ' + ISNULL(p.PMiddleName + ' ', '') + p.PFirstName AS PatientName, "
 				+ "d.DrLastName + ' ' + ISNULL(d.DrMiddleName + ' ', '') + d.DrFirstName AS DoctorName, "
