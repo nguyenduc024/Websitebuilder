@@ -388,7 +388,7 @@ sudo chown -R $(whoami) ~/.pnpm-store
 ## 📁 Cấu trúc dự án
 
 ```
-Websitebuilder/
+HealthLinkAPP/
 ├── dist-electron/          # Electron main process (compiled)
 │   └── main.cjs            # Entry point cho Electron
 ├── HealthLinkDB/           # Database scripts
